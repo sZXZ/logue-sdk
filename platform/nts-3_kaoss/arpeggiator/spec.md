@@ -14,7 +14,7 @@ The plugin follows the standard NTS-3 logue SDK structure:
 - **Chord Support**: Generation of chords (Major, Minor, 7ths, etc.) based on a root pitch.
 - **Tempo Synchronization**: Arpeggio steps are tied to the NTS-3's internal/external tempo via 16th-note ticks.
 - **Playback Modes**: Support for Up, Down, Up-Down, and Random directions.
-- **Waveform Selection**: Choice of classic oscillator shapes (Saw, Sine, Square).
+- **Waveform Selection**: Choice of classic oscillator shapes (Saw, Sine, Square, Triangle).
 
 ## Parameter Specifications
 
@@ -27,7 +27,7 @@ The plugin utilizes 6 internal parameters, mapped to physical controls for real-
 | **GATE / DEPTH**| **DEPTH** Knob | 0 - 1023 | Controls the duration/sustain of each arpeggiated note. |
 | **PATTERN** | Menu | 0 - 7 | Selects the playback rhythm (1/4, 1/8, 1/16, etc. including Triplets). |
 | **MODE** | Menu | 0 - 19 | Combined direction + octave range. Encoding: `value = direction×4 + (octaves−1)`. Directions: Up/Down/UpDn/Rnd/Seq. Octaves: 1–4. E.g. 0=Up 1oct, 3=Up 4oct, 4=Down 1oct, 19=Seq 4oct. |
-| **WAVE** | Slider | 0 - 1023 | Oscillator morph: 0=Sine, 256=Square, 512=Saw, 1023=Sine (wraps). |
+| **WAVE** | Slider | 0 - 1023 | Oscillator morph: 0=Sine, 256=Triangle, 512=Square, 768=Saw, 1023=Sine (wraps). |
 
 ## Technical Implementation Details
 
@@ -47,7 +47,7 @@ The sequence advances inside the `unit_tempo_4ppqn_tick(counter)` callback.
 
 ### 3. Sound Synthesis (`Process`)
 The audio loop in `effect.h` implements a monophonic synth voice:
-- **Oscillator**: Uses `osc_sawf`, `osc_sinf`, or `osc_sqrf` with the frequency derived from the current arpeggio note.
+- **Oscillator**: Uses `osc_sawf`, `osc_sinf`, `osc_sqrf`, or triangle wave with the frequency derived from the current arpeggio note.
 - **Envelope**: A simple AD (Attack/Decay) or gated envelope. The "Gate" time is modulated by the **DEPTH** control.
 - **Smoothing**: Frequency changes are smoothed to prevent clicks during arpeggio steps.
 - **Mixing**: As a "Generic FX" source, the unit provides a mix between the dry input and the generated arpeggio signal.

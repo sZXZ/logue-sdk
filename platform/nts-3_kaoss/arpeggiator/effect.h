@@ -22,7 +22,7 @@ public:
   enum { ROOT = 0U, CHORD, GATE, PATTERN, MODE, WAVE, LEVEL, ADSR, NUM_PARAMS };
   // MODE encodes both direction and octave range: value = direction*4 + (octaves-1)
   // Directions: 0=Up 1=Down 2=UpDown 3=Random 4=Seq   Octaves: 1-4
-  // WAVE is a continuous 0-1023 morph: 0=Sine, 256=Square, 512=Saw, 1023=Sine
+  // WAVE is a continuous 0-1023 morph: 0=Sine, 256=Triangle, 512=Square, 768=Saw, 1023=Sine
   // ADSR is a 0-1023 morph across 5 envelope presets (Pluck/Pad/Perc/Swell/LongRel)
   enum { UP = 0, DOWN, UPDOWN, RANDOM, SEQ };
 
@@ -47,7 +47,7 @@ public:
     uint8_t pattern{P_1_8}; // Rhythmic pattern
     uint8_t mode{UP};       // Playback direction (UP/DOWN/UPDOWN/RANDOM/SEQ)
     uint8_t range{1};       // Octave span 1-4 (derived from combined MODE param)
-    uint16_t wave{0};       // Wave morph 0-1023 (0=Sine,256=Square,512=Saw,1023=Sine)
+    uint16_t wave{0};       // Wave morph 0-1023 (0=Sine,256=Triangle,512=Square,768=Saw,1023=Sine)
     float level{0.5f};      // Output level (0-1)
     uint16_t adsr{0};       // ADSR morph 0-1023 (Pluck->Pad->Perc->Swell->LongRel)
 
@@ -272,21 +272,25 @@ public:
       float w0 = smooth_hz_ * (1.0f / 48000.0f);
 
       // Calculate Oscillator - morph across wave slider (0-1023)
-      // Segments: 0-255 Sine->Square, 256-511 Square->Saw, 512-1023 Saw->Sine
+      // Segments: 0-255 Sine->Triangle, 256-511 Triangle->Square, 512-767 Square->Saw, 768-1023 Saw->Sine
       float sig = 0.f;
       {
         const float w = (float)params_.wave;
         const float sine_sig   = osc_sinf(phase_);
+        const float tri_sig    = (phase_ < 0.5f) ? (-1.0f + 4.0f * phase_) : (3.0f - 4.0f * phase_);
         const float square_sig = osc_sqrf(phase_);
         const float saw_sig    = osc_sawf(phase_);
         if (w < 256.f) {
           float t = w * (1.f / 256.f);
-          sig = sine_sig + t * (square_sig - sine_sig);
+          sig = sine_sig + t * (tri_sig - sine_sig);
         } else if (w < 512.f) {
           float t = (w - 256.f) * (1.f / 256.f);
+          sig = tri_sig + t * (square_sig - tri_sig);
+        } else if (w < 768.f) {
+          float t = (w - 512.f) * (1.f / 256.f);
           sig = square_sig + t * (saw_sig - square_sig);
         } else {
-          float t = (w - 512.f) * (1.f / 511.f);
+          float t = (w - 768.f) * (1.f / 255.f);
           sig = saw_sig + t * (sine_sig - saw_sig);
         }
       }

@@ -35,7 +35,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
                  // 4: MODE (direction*4 + octaves-1, range 0-19)
                  {0, 19, 0, 0, k_unit_param_type_strings, 0, 0, 0, {"MODE"}},
 
-                 // 5: WAVE (0=Sine, 256=Square, 512=Saw, 1023=Sine)
+                 // 5: WAVE (0=Sine, 256=Triangle, 512=Square, 768=Saw, 1023=Sine)
                  {0, 1023, 0, 0, k_unit_param_type_none, 0, 0, 0, {"WAVE"}},
 
                  // 6: LEVEL
