@@ -28,7 +28,7 @@ The plugin utilizes 6 internal parameters, mapped to physical controls for real-
 | **PATTERN** | Menu | 0 - 7 | Selects the playback rhythm (1/4, 1/8, 1/16, etc. including Triplets). |
 | **MODE** | Menu | 0 - 4 | Arpeggio direction: 0=Up, 1=Down, 2=Up-Down, 3=Random, 4=Seq. |
 | **RANGE** | Menu | 1 - 4 | Number of octaves the arpeggio spans. |
-| **WAVE** | Menu | 0 - 2 | Oscillator type: 0=Saw, 1=Sine, 2=Square. |
+| **WAVE** | Slider | 0 - 1023 | Oscillator morph: 0=Sine, 256=Square, 512=Saw, 1023=Sine (wraps). |
 
 ## Technical Implementation Details
 

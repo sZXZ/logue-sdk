@@ -38,8 +38,8 @@ const __unit_header genericfx_unit_header_t unit_header = {
                  // 5: RANGE
                  {1, 4, 1, 1, k_unit_param_type_none, 0, 0, 0, {"RANGE"}},
 
-                 // 6: WAVE
-                 {0, 2, 0, 0, k_unit_param_type_strings, 0, 0, 0, {"WAVE"}},
+                 // 6: WAVE (0=Sine, 256=Square, 512=Saw, 1023=Sine)
+                 {0, 1023, 0, 0, k_unit_param_type_none, 0, 0, 0, {"WAVE"}},
 
                  // 7: LEVEL
                  {0, 1023, 512, 512, k_unit_param_type_none, 0, 0, 0, {"LEVEL"}}},
@@ -65,7 +65,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
         {k_genericfx_param_assign_none, k_genericfx_curve_linear,
          k_genericfx_curve_unipolar, 0, 4, 2},
         {k_genericfx_param_assign_none, k_genericfx_curve_linear,
-         k_genericfx_curve_unipolar, 0, 2, 1},
+         k_genericfx_curve_unipolar, 0, 1023, 0},
          
         // LEVEL mapped to DEPTH control
         {k_genericfx_param_assign_depth, k_genericfx_curve_exp,

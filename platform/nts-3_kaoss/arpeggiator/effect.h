@@ -20,7 +20,7 @@
 class Arpeggiator {
 public:
   enum { ROOT = 0U, CHORD, GATE, PATTERN, MODE, RANGE, WAVE, LEVEL, NUM_PARAMS };
-  enum { SAW = 0, SINE, SQUARE };
+  // WAVE is now a continuous 0-1023 morph: 0=Sine, 256=Square, 512=Saw, 1023=Sine
   enum { UP = 0, DOWN, UPDOWN, RANDOM, SEQ };
 
   // Rhythmic divisions (in ticks, where 1 quarter note = 480 logical ticks for
@@ -44,7 +44,7 @@ public:
     uint8_t pattern{P_1_8}; // Rhythmic pattern
     uint8_t mode{UP};       // Playback mode
     uint8_t range{1};       // Octave range
-    uint8_t wave{SAW};      // Oscillator type
+    uint16_t wave{0};       // Wave morph 0-1023 (0=Sine,256=Square,512=Saw,1023=Sine)
     float level{0.5f};      // Output level (0-1)
 
     void reset() {
@@ -54,7 +54,7 @@ public:
       pattern = P_1_8;
       mode = UP;
       range = 1;
-      wave = SAW;
+      wave = 0;
       level = 0.5f;
     }
   };
@@ -174,19 +174,27 @@ public:
       smooth_hz_ += (current_note_hz_ - smooth_hz_) * 0.01f;
       float w0 = smooth_hz_ * (1.0f / 48000.0f);
 
-      // Calculate Oscillator
+      // Calculate Oscillator - morph across wave slider (0-1023)
+      // Segments: 0-255 Sine->Square, 256-511 Square->Saw, 512-1023 Saw->Sine
       float sig = 0.f;
-      switch (params_.wave) {
-      case SINE:
-        sig = osc_sinf(phase_);
-        break;
-      case SQUARE:
-        sig = osc_sqrf(phase_);
-        break;
-      case SAW:
-      default:
-        sig = osc_sawf(phase_);
-        break;
+      {
+        const float w = (float)params_.wave;
+        const float sine_sig   = osc_sinf(phase_);
+        const float square_sig = osc_sqrf(phase_);
+        const float saw_sig    = osc_sawf(phase_);
+        if (w < 256.f) {
+          // Sine -> Square
+          float t = w * (1.f / 256.f);
+          sig = sine_sig + t * (square_sig - sine_sig);
+        } else if (w < 512.f) {
+          // Square -> Saw
+          float t = (w - 256.f) * (1.f / 256.f);
+          sig = square_sig + t * (saw_sig - square_sig);
+        } else {
+          // Saw -> Sine
+          float t = (w - 512.f) * (1.f / 511.f);
+          sig = saw_sig + t * (sine_sig - saw_sig);
+        }
       }
 
       phase_ += w0;
@@ -233,7 +241,7 @@ public:
       updateActiveNotes();
       break;
     case WAVE:
-      params_.wave = value;
+      params_.wave = (uint16_t)std::min(value, (int32_t)1023);
       break;
     case LEVEL:
       params_.level = value / 1023.f;
@@ -256,7 +264,7 @@ public:
     case RANGE:
       return params_.range;
     case WAVE:
-      return params_.wave;
+      return (int32_t)params_.wave;
     case LEVEL:
       return (int32_t)(params_.level * 1023.f);
     }
@@ -286,12 +294,9 @@ public:
         return names[value];
       break;
     }
-    case WAVE: {
-      static const char *names[] = {"Saw", "Sine", "Square"};
-      if (value >= 0 && value < 3)
-        return names[value];
-      break;
-    }
+    case WAVE:
+      // Continuous slider - no string value needed
+      return nullptr;
     }
     return nullptr;
   }
