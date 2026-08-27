@@ -19,8 +19,10 @@
 
 class Arpeggiator {
 public:
-  enum { ROOT = 0U, CHORD, GATE, PATTERN, MODE, RANGE, WAVE, LEVEL, NUM_PARAMS };
-  // WAVE is now a continuous 0-1023 morph: 0=Sine, 256=Square, 512=Saw, 1023=Sine
+  enum { ROOT = 0U, CHORD, GATE, PATTERN, MODE, WAVE, LEVEL, NUM_PARAMS };
+  // MODE encodes both direction and octave range: value = direction*4 + (octaves-1)
+  // Directions: 0=Up 1=Down 2=UpDown 3=Random 4=Seq   Octaves: 1-4
+  // WAVE is a continuous 0-1023 morph: 0=Sine, 256=Square, 512=Saw, 1023=Sine
   enum { UP = 0, DOWN, UPDOWN, RANDOM, SEQ };
 
   // Rhythmic divisions (in ticks, where 1 quarter note = 480 logical ticks for
@@ -42,8 +44,8 @@ public:
     uint8_t chord{0};       // Chord index
     float gate{0.5f};       // Gate length (0-1)
     uint8_t pattern{P_1_8}; // Rhythmic pattern
-    uint8_t mode{UP};       // Playback mode
-    uint8_t range{1};       // Octave range
+    uint8_t mode{UP};       // Playback direction (UP/DOWN/UPDOWN/RANDOM/SEQ)
+    uint8_t range{1};       // Octave span 1-4 (derived from combined MODE param)
     uint16_t wave{0};       // Wave morph 0-1023 (0=Sine,256=Square,512=Saw,1023=Sine)
     float level{0.5f};      // Output level (0-1)
 
@@ -234,10 +236,9 @@ public:
       setTempo(last_tempo_); // refresh timing
       break;
     case MODE:
-      params_.mode = value;
-      break;
-    case RANGE:
-      params_.range = std::max((uint8_t)1, (uint8_t)value);
+      // Combined mode+range: value = direction*4 + (octaves-1), range 0-19
+      params_.mode  = (uint8_t)std::min(value / 4, (int32_t)4);
+      params_.range = (uint8_t)(value % 4) + 1;
       updateActiveNotes();
       break;
     case WAVE:
@@ -260,9 +261,7 @@ public:
     case PATTERN:
       return params_.pattern;
     case MODE:
-      return params_.mode;
-    case RANGE:
-      return params_.range;
+      return (int32_t)(params_.mode * 4 + (params_.range - 1));
     case WAVE:
       return (int32_t)params_.wave;
     case LEVEL:
@@ -289,8 +288,14 @@ public:
       break;
     }
     case MODE: {
-      static const char *names[] = {"Up", "Down", "Up-Down", "Random", "Seq"};
-      if (value >= 0 && value < 5)
+      static const char *names[] = {
+        "Up 1",   "Up 2",   "Up 3",   "Up 4",
+        "Down 1", "Down 2", "Down 3", "Down 4",
+        "UpDn 1", "UpDn 2", "UpDn 3", "UpDn 4",
+        "Rnd 1",  "Rnd 2",  "Rnd 3",  "Rnd 4",
+        "Seq 1",  "Seq 2",  "Seq 3",  "Seq 4",
+      };
+      if (value >= 0 && value < 20)
         return names[value];
       break;
     }

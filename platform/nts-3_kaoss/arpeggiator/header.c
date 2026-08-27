@@ -17,7 +17,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
             .unit_id = 0x02U,
             .version = 0x00010000U,
             .name = "Arpeggiator",
-            .num_params = 8,
+            .num_params = 7,
 
             .params =
                 {// 0: ROOT (X mapping)
@@ -32,16 +32,13 @@ const __unit_header genericfx_unit_header_t unit_header = {
                  // 3: PATTERN
                  {0, 7, 2, 2, k_unit_param_type_strings, 0, 0, 0, {"PATTERN"}},
 
-                 // 4: MODE
-                 {0, 4, 0, 0, k_unit_param_type_strings, 0, 0, 0, {"MODE"}},
+                 // 4: MODE (direction*4 + octaves-1, range 0-19)
+                 {0, 19, 0, 0, k_unit_param_type_strings, 0, 0, 0, {"MODE"}},
 
-                 // 5: RANGE
-                 {1, 4, 1, 1, k_unit_param_type_none, 0, 0, 0, {"RANGE"}},
-
-                 // 6: WAVE (0=Sine, 256=Square, 512=Saw, 1023=Sine)
+                 // 5: WAVE (0=Sine, 256=Square, 512=Saw, 1023=Sine)
                  {0, 1023, 0, 0, k_unit_param_type_none, 0, 0, 0, {"WAVE"}},
 
-                 // 7: LEVEL
+                 // 6: LEVEL
                  {0, 1023, 512, 512, k_unit_param_type_none, 0, 0, 0, {"LEVEL"}}},
         },
     .default_mappings = {
@@ -57,16 +54,18 @@ const __unit_header genericfx_unit_header_t unit_header = {
         {k_genericfx_param_assign_none, k_genericfx_curve_linear,
          k_genericfx_curve_unipolar, 0, 1023, 512},
 
+        // PATTERN
         {k_genericfx_param_assign_none, k_genericfx_curve_linear,
          k_genericfx_curve_unipolar, 0, 7, 2},
 
+        // MODE (direction*4 + octaves-1, range 0-19)
         {k_genericfx_param_assign_none, k_genericfx_curve_linear,
-         k_genericfx_curve_unipolar, 0, 4, 2},
-        {k_genericfx_param_assign_none, k_genericfx_curve_linear,
-         k_genericfx_curve_unipolar, 0, 4, 2},
+         k_genericfx_curve_unipolar, 0, 19, 0},
+
+        // WAVE
         {k_genericfx_param_assign_none, k_genericfx_curve_linear,
          k_genericfx_curve_unipolar, 0, 1023, 0},
-         
+
         // LEVEL mapped to DEPTH control
         {k_genericfx_param_assign_depth, k_genericfx_curve_exp,
          k_genericfx_curve_unipolar, 0, 1023, 512}}};

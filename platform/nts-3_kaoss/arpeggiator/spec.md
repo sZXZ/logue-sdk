@@ -26,8 +26,7 @@ The plugin utilizes 6 internal parameters, mapped to physical controls for real-
 | **CHORD / Y** | **Y-Axis** | 0 - 10 | Selects the Chord Type (e.g., Major, Minor, Sus4). |
 | **GATE / DEPTH**| **DEPTH** Knob | 0 - 1023 | Controls the duration/sustain of each arpeggiated note. |
 | **PATTERN** | Menu | 0 - 7 | Selects the playback rhythm (1/4, 1/8, 1/16, etc. including Triplets). |
-| **MODE** | Menu | 0 - 4 | Arpeggio direction: 0=Up, 1=Down, 2=Up-Down, 3=Random, 4=Seq. |
-| **RANGE** | Menu | 1 - 4 | Number of octaves the arpeggio spans. |
+| **MODE** | Menu | 0 - 19 | Combined direction + octave range. Encoding: `value = direction×4 + (octaves−1)`. Directions: Up/Down/UpDn/Rnd/Seq. Octaves: 1–4. E.g. 0=Up 1oct, 3=Up 4oct, 4=Down 1oct, 19=Seq 4oct. |
 | **WAVE** | Slider | 0 - 1023 | Oscillator morph: 0=Sine, 256=Square, 512=Saw, 1023=Sine (wraps). |
 
 ## Technical Implementation Details
