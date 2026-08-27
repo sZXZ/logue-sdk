@@ -76,7 +76,7 @@ public:
     samplerate_ = desc->samplerate;
     params_.reset();
     reset_state();
-    setTempo(120 << 8); // 120 BPM default
+    setTempo(120 << 16); // 120 BPM in UQ16.16
     updateActiveNotes();
 
     return k_unit_err_none;
@@ -105,12 +105,13 @@ public:
     seq_dir_ = 1;
 
     samples_per_tick_accum_ = 0.f;
+    setTempo(last_tempo_);
   }
 
-  // BPM is in 1/256 units
+  // BPM is in UQ16.16 format (integer part in upper 16 bits, fractional in lower 16)
   inline void setTempo(uint32_t tempo) {
     last_tempo_ = tempo;
-    float bpm = (float)tempo / 65536.0f;
+    float bpm = (tempo >> 16) + (tempo & 0xFFFF) / 65536.0f;
     if (bpm < 1.0f)
       bpm = 1.0f;
 
@@ -394,7 +395,7 @@ private:
 
   Params params_;
   uint32_t samplerate_{48000};
-  uint32_t last_tempo_{120 << 8};
+  uint32_t last_tempo_{120 << 16};
 
   // Arp State
   uint8_t active_notes_[32];
