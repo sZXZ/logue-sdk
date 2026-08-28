@@ -217,7 +217,12 @@ public:
         if (samples_per_tick_accum_ >= samples_per_step_) {
           samples_per_tick_accum_ -= samples_per_step_;
           advanceSequence();
-          triggerNote();
+          uint8_t prob_group = params_.pattern >> 3;
+          static const uint8_t probs[] = {100, 75, 50, 25};
+          uint8_t prob = (prob_group < 4) ? probs[prob_group] : 100;
+          if (prob >= 100 || (uint8_t)(osc_rand() % 100) < prob) {
+            triggerNote();
+          }
         }
 
         // Gate close: when accumulated time exceeds gate fraction, begin release.
@@ -375,9 +380,13 @@ public:
       break;
     }
     case PATTERN: {
-      static const char *names[] = {"1/4",  "1/4T",  "1/8",  "1/8T",
-                                    "1/16", "1/16T", "1/32", "1/32T"};
-      if (value >= 0 && value < 8)
+      static const char *names[] = {
+        "1/4",      "1/4T",      "1/8",      "1/8T",      "1/16",      "1/16T",      "1/32",      "1/32T",
+        "1/4 75%",  "1/4T 75%",  "1/8 75%",  "1/8T 75%",  "1/16 75%",  "1/16T 75%",  "1/32 75%",  "1/32T 75%",
+        "1/4 50%",  "1/4T 50%",  "1/8 50%",  "1/8T 50%",  "1/16 50%",  "1/16T 50%",  "1/32 50%",  "1/32T 50%",
+        "1/4 25%",  "1/4T 25%",  "1/8 25%",  "1/8T 25%",  "1/16 25%",  "1/16T 25%",  "1/32 25%",  "1/32T 25%"
+      };
+      if (value >= 0 && value < 32)
         return names[value];
       break;
     }

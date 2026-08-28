@@ -29,8 +29,8 @@ const __unit_header genericfx_unit_header_t unit_header = {
                  // 2: GATE (DEPTH mapping)
                  {0, 1023, 512, 512, k_unit_param_type_none, 0, 0, 0, {"GATE"}},
 
-                 // 3: PATTERN
-                 {0, 7, 2, 2, k_unit_param_type_strings, 0, 0, 0, {"PATTERN"}},
+                 // 3: PATTERN - 1/4 to 1/32T at 100%, 75%, 50%, 25% note trigger (range 0-31)
+                 {0, 31, 2, 2, k_unit_param_type_strings, 0, 0, 0, {"PATTERN"}},
 
                  // 4: MODE (direction*4 + octaves-1, range 0-19)
                  {0, 19, 0, 0, k_unit_param_type_strings, 0, 0, 0, {"MODE"}},
@@ -59,7 +59,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
 
         // PATTERN
         {k_genericfx_param_assign_none, k_genericfx_curve_linear,
-         k_genericfx_curve_unipolar, 0, 7, 2},
+         k_genericfx_curve_unipolar, 0, 31, 2},
 
         // MODE (direction*4 + octaves-1, range 0-19)
         {k_genericfx_param_assign_none, k_genericfx_curve_linear,
