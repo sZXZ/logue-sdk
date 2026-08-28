@@ -21,7 +21,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
 
             .params =
                 {// 0: ROOT (X mapping)
-                 {0, 1023, 0, 0, k_unit_param_type_none, 0, 0, 0, {"ROOT"}},
+                 {0, 1023, 0, 0, k_unit_param_type_midi_note, 0, 0, 0, {"ROOT"}},
 
                  // 1: CHORD (Y mapping)
                  {0, 10, 0, 0, k_unit_param_type_strings, 0, 0, 0, {"CHORD"}},

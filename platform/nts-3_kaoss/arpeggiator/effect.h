@@ -310,7 +310,7 @@ public:
   inline void setParameter(uint8_t index, int32_t value) {
     switch (index) {
     case ROOT:
-      params_.root = 36 + (value * (72 - 36) / 1023); // C2 to C5
+      params_.root = value * 127 / 1023; // C-1 to G9
       updateActiveNotes();
       break;
     case CHORD:
@@ -345,7 +345,7 @@ public:
   inline int32_t getParameterValue(uint8_t index) const {
     switch (index) {
     case ROOT:
-      return (params_.root - 36) * 1023 / (72 - 36);
+      return params_.root * 1023 / 127;
     case CHORD:
       return params_.chord;
     case GATE:
