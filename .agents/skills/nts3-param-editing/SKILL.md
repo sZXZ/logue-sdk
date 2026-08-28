@@ -7,10 +7,15 @@ description: Guide and patterns for adding, modifying, or merging parameters in 
 
 ## 1. Header Definitions & Sync
 Keep `header.c` (hardware) and `sim/header.c` (WASM simulator) identical:
-* **Param Count**: Set `.num_params` in `unit_header.common`.
+* **Param Count**: Set `.num_params` in `unit_header.common` (max `UNIT_MAX_PARAM_COUNT` = 8).
 * **Parameter Descriptors (`params[]`)**:
-  - Continuous Slider: `{min, max, init, center, k_unit_param_type_none, frac, frac_mode, {"NAME"}}`
-  - String Menu: `{min, max, init, center, k_unit_param_type_strings, frac, frac_mode, {"NAME"}}`
+  `{min, max, center, init, type, frac, frac_mode, reserved, {"NAME"}}`
+* **Parameter Types (`runtime.h` `k_unit_param_type_*`)**:
+  - `none`: Typeless / raw numerical slider.
+  - `strings`: Custom text lookup via `unit_get_param_str_value()`.
+  - `enum`: Numerical enum (displays `value + 1` if min is 0).
+  - Units (`percent`, `db`, `cents`, `semi`, `oct`, `hertz`, `khertz`, `bpm`, `msec`, `sec`).
+  - Controls (`drywet` D/BAL/W, `pan` L/C/R, `spread` </>, `onoff` OFF/ON, `midi_note` C0-G9).
 * **Controller Assignments (`default_mappings[]`)**:
   - Assign to `k_genericfx_param_assign_x`, `_y`, `_depth`, or `_none`.
 
