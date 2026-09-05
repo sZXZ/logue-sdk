@@ -2,23 +2,25 @@
 /*
  *  File: effect.h
  *
- *  NTS-3 kaoss pad kit "NTS-303" acid generator effect
+ *  NTS-3 kaoss pad kit "ACID303" generative acid synthesizer
  *
- *  A TB-303 style acid synthesizer. Ignores the audio input and generates
- *  a self-contained mono acid bassline:
+ *  A TB-303 style acid synthesizer that ignores the audio input and generates
+ *  a self-contained, tempo-synced 16-step acid bassline:
  *
- *    - 16-step tempo-synced sequencer (16ths) playing a built-in acid
- *      pattern transposed by the ROOT note parameter
+ *    - Generative 16-step sequencer (16ths) at host BPM
+ *    - "PATTERN" seed deterministically generates pitch / accent / slide data
+ *      on a natural-minor scale via a lightweight LCG
+ *    - "DENSITY" uses a Bjorklund Euclidean rhythm to spread K active steps
+ *      evenly across the 16-step bar
  *    - Band-limited (wavetable) Saw / Square oscillator
- *    - One-pole smoothed oscillator pitch (Glide / portamento)
+ *    - One-pole glide (portamento) on pitch transitions
  *    - 4-stage Moog-ladder resonant low-pass filter with tanh saturation
- *    - Simple exponential Decay envelope on the VCA and VCF
+ *    - Generous linear-attack / decay / release envelope on the VCA and VCF
  *
- *  The sequencer advances at the device/external tempo (setTempo). Notes are
- *  only audible while the KAOSS pad is touched: touching gates the envelope
- *  and each subsequent 16th-note step retriggers the pattern. X axis sweeps
- *  the filter cutoff, Y axis controls the resonance.
- *
+ *  The clock keeps running whenever tempo is applied, but audio only sounds
+ *  while the KAOSS pad is touched. X axis sweeps filter cutoff, Y axis the
+ *  resonance. "ACID" is a macro that scales both the glide time and the
+ *  intensity of sequenced accents (volume / brightness / decay punch).
  */
 #include "processor.h"
 #include "unit_genericfx.h"
@@ -29,18 +31,37 @@ namespace
 {
 constexpr float k_sr = 48000.f;
 constexpr float k_sr_recip = 1.f / k_sr;
-
-// 16-step acid bassline (A A A A | E D F ...), transposed by ROOT.
-// pitch: semitone offset from root (valid only when hit == 1)
-const int8_t k_pitch[16] = {0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 10, 0, 8, 0, 0, 0};
-// hit:  1 = step sounds
-const uint8_t k_hit[16] = {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0};
-// accent: 1 = emphasized step (louder, brighter, tighter decay)
-const uint8_t k_accent[16] = {1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0};
-// slide: 1 = legato glide from previous note (no re-attack)
-const uint8_t k_slide[16] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0};
 constexpr uint8_t k_num_steps = 16;
 constexpr uint8_t k_step_mask = k_num_steps - 1;
+
+// Natural-minor scale offsets for the generative bass (root cents).
+const int8_t k_scale[8] = {0, 2, 3, 5, 7, 8, 10, 12};
+
+// Simple deterministic LCG used only by the (run-once) pattern generator.
+static inline uint32_t lcg_next(uint32_t &state)
+{
+  state = state * 1664525u + 1013904223u;
+  return state >> 16; // top 16 bits have the longest period quality
+}
+
+// Bjorklund Euclidean rhythm: spread `pulses` onsets as evenly as possible
+// across `steps_` positions.
+static inline void euclid(uint8_t pulses, uint8_t steps_, uint8_t gates[16])
+{
+  for (uint8_t i = 0; i < steps_; ++i)
+    gates[i] = 0;
+  if (pulses == 0)
+    return;
+
+  const uint8_t pitch = steps_ / pulses; // base gap
+  const uint8_t rem = steps_ % pulses;   // steps to make slightly wider
+  uint8_t index = 0;
+  for (uint8_t i = 0; i < pulses; ++i)
+  {
+    gates[index] = 1;
+    index += pitch + (i < rem ? 1 : 0);
+  }
+}
 }
 
 class Effect : public Processor
@@ -53,37 +74,36 @@ public:
   {
     PARAM_WAVE = 0U,
     PARAM_ROOT,
+    PARAM_PATTERN, // seed for the generative pitch/accent/slide
+    PARAM_DENSITY, // Euclidean pulse count (K)
     PARAM_CUTOFF,
     PARAM_RESONANCE,
-    PARAM_ENV_MOD,
     PARAM_DECAY,
-    PARAM_ACCENT,
-    PARAM_GLIDE,
+    PARAM_ACID,     // macro: glide time + accent intensity
     NUM_PARAMS
   };
 
-  // Note: Make sure that default param values correspond to declarations in header.c
   struct Params
   {
-    float wave;      // 0 = Saw, 1 = Square
-    float root;      // MIDI note number 24..84 (pattern root)
-    float cutoff;    // 0..1
-    float resonance; // 0..1
-    float env_mod;   // 0..1
-    float decay;     // 0..1 (10ms .. 2000ms)
-    float accent;    // 0..1
-    float glide;     // 0..1 (0ms .. 60ms)
+    float wave;     // 0 = Saw, 1 = Square
+    float root;     // MIDI note number 24..84 (bass transposition)
+    int32_t pattern; // seed 0..1023
+    int32_t density; // 0..1023 -> K pulses 1..16
+    float cutoff;   // 0..1
+    float resonance;// 0..1
+    float decay;    // 0..1 (10ms .. 2000ms)
+    float acid;     // 0..1 macro: glide time + accent intensity
 
     void reset()
     {
       wave = 0.f;
       root = 45.f;          // A2
+      pattern = 512;
+      density = 768;        // ~12 hits
       cutoff = 256.f / 1023.f;
       resonance = 384.f / 1023.f;
-      env_mod = 512.f / 1023.f;
       decay = 384.f / 1023.f;
-      accent = 256.f / 1023.f;
-      glide = 192.f / 1023.f;
+      acid = 384.f / 1023.f;
     }
 
     Params() { reset(); }
@@ -101,6 +121,22 @@ public:
       params_.root = static_cast<float>(value); // MIDI note 24..84
       break;
 
+    case PARAM_PATTERN:
+      if (params_.pattern != value)
+      {
+        params_.pattern = value;
+        pattern_dirty_ = true;
+      }
+      break;
+
+    case PARAM_DENSITY:
+      if (params_.density != value)
+      {
+        params_.density = value;
+        density_dirty_ = true;
+      }
+      break;
+
     case PARAM_CUTOFF:
       params_.cutoff = param_10bit_to_f32(value);
       break;
@@ -109,20 +145,12 @@ public:
       params_.resonance = param_10bit_to_f32(value);
       break;
 
-    case PARAM_ENV_MOD:
-      params_.env_mod = param_10bit_to_f32(value);
-      break;
-
     case PARAM_DECAY:
       params_.decay = param_10bit_to_f32(value);
       break;
 
-    case PARAM_ACCENT:
-      params_.accent = param_10bit_to_f32(value);
-      break;
-
-    case PARAM_GLIDE:
-      params_.glide = param_10bit_to_f32(value);
+    case PARAM_ACID:
+      params_.acid = param_10bit_to_f32(value);
       break;
 
     default:
@@ -160,7 +188,6 @@ public:
     amp_ = 0.f;
     env_state_ = ENV_IDLE;
     gate_ = false;
-    note_sounding_ = false;
     step_accent_ = 0.f;
 
     step_ = 0;
@@ -168,6 +195,11 @@ public:
     samples_per_step_ = k_sr_recip_16th(120.f);
 
     s1_ = s2_ = s3_ = s4_ = 0.f;
+
+    pattern_dirty_ = true;
+    density_dirty_ = true;
+    regenPattern();
+    regenEuclid();
   }
 
   void teardown() override final { buffer_ = nullptr; }
@@ -179,7 +211,6 @@ public:
     amp_ = 0.f;
     env_state_ = ENV_IDLE;
     gate_ = false;
-    note_sounding_ = false;
     step_accent_ = 0.f;
     step_ = 0;
     clock_accum_ = 0.f;
@@ -197,7 +228,11 @@ public:
   // audio processing callbacks
   void process(const float *__restrict in, float *__restrict out, uint32_t frames) override final
   {
-    (void)in; // self-contained generator, ignore input
+    // Regenerate pattern arrays only when their knobs actually changed.
+    if (pattern_dirty_)
+      regenPattern();
+    if (density_dirty_)
+      regenEuclid();
 
     // Cache current parameter values
     const Params p = params_;
@@ -208,21 +243,24 @@ public:
     // Resonance feedback (max ~1.6, gently self-oscillates near the top)
     const float fb = 1.6f * clip01f(p.resonance);
 
+    // ACID macro: maps 0..1 to glide time 0..150 ms.
+    const float acid = clip01f(p.acid);
+    const float glide_ms = 0.150f * acid + 0.0005f; // avoid a zero time constant
+
     // Envelope linear increment per sample.
-    // Attack ~1.2 ms constant-increment ramp (smooth, glitch-free like the
-    // reference arpeggiator), decay 10 ms .. 2000 ms, release ~25 ms.
+    // Attack ~1.2 ms constant-increment ramp, decay 10 ms .. 2000 ms,
+    // release ~25 ms (reduced by ACID for snappier accents).
     const float atk_inc = k_sr_recip / 0.0012f;
     const float dec_inc = k_sr_recip / (0.010f + 1.990f * p.decay);
-    const float rel_inc = k_sr_recip / 0.025f;
+    const float rel_inc = k_sr_recip / (0.025f * (1.f + 0.5f * acid));
 
-    // Glide (portamento) coefficient, 0 ms .. 60 ms
-    const float kg = 1.f - fasterexpf(-k_sr_recip / (0.001f + 0.060f * p.glide));
+    // Glide (portamento) time, 0 .. 150 ms scaled by ACID.
+    const float kg = 1.f - fasterexpf(-k_sr_recip / glide_ms);
 
-    // VCF envelope modulation depth, scaled by env mod
-    const float env_amount = 4800.f * clip01f(p.env_mod);
-    const float acc = p.accent;
+    // VCF envelope modulation: moderate base sweep, boosted by ACID on accents.
+    const float env_amount = 6000.f * (0.35f + 0.65f * acid);
 
-    for (const float *out_end = out + frames * 2; out != out_end; out += 2)
+    for (const float *out_end = out + frames * 2; out != out_end; in += 2, out += 2)
     {
       // --- Sequencer clock (16th notes) --------------------------------------
       clock_accum_ += 1.f;
@@ -231,10 +269,10 @@ public:
         clock_accum_ -= samples_per_step_;
         step_ = (step_ + 1) & k_step_mask;
 
-        if (gate_ && k_hit[step_])
+        if (gate_ && hit_[step_])
         {
-          const float n = p.root + (float)k_pitch[step_];
-          if (k_slide[step_] && env_state_ != ENV_IDLE)
+          const float n = p.root + (float)pitch_[step_];
+          if (slide_[step_] && env_state_ != ENV_IDLE)
           {
             // Legato slide: glide the pitch, no re-attack
             note_target_ = n;
@@ -248,9 +286,8 @@ public:
             if (env_state_ == ENV_IDLE)
               amp_ = 0.f;
             env_state_ = ENV_ATTACK;
-            note_sounding_ = true;
           }
-          step_accent_ = k_accent[step_] ? 1.f : 0.f;
+          step_accent_ = accent_[step_] ? 1.f : 0.f;
         }
       }
 
@@ -275,7 +312,6 @@ public:
         {
           amp_ = 0.f;
           env_state_ = ENV_IDLE;
-          note_sounding_ = false;
         }
         break;
       case ENV_RELEASE:
@@ -284,7 +320,6 @@ public:
         {
           amp_ = 0.f;
           env_state_ = ENV_IDLE;
-          note_sounding_ = false;
         }
         break;
       case ENV_IDLE:
@@ -293,8 +328,8 @@ public:
         break;
       }
 
-      // Accent: louder + brighter on accented steps
-      const float acc_boost = 1.f + 0.6f * acc * (0.4f + step_accent_);
+      // Accent: louder + brighter, boosted by ACID intensity.
+      const float acc_boost = 1.f + (0.9f * acid) * (0.4f + step_accent_);
 
       // --- Glide: one-pole smoothing toward the target note ------------------
       note_now_ += kg * (note_target_ - note_now_);
@@ -335,8 +370,10 @@ public:
       // soft clip to keep things from exploding
       const float s = fx_softclipf(0.15f, out_sample);
 
-      out[0] = s;
-      out[1] = s;
+      // Standard FX pass-through: dry input always passes, the generated acid
+      // signal is mixed on top (silent when idle / not touched).
+      out[0] = in[0] + s;
+      out[1] = in[1] + s;
     }
   }
 
@@ -352,11 +389,11 @@ public:
       gate_ = true;
       step_accent_ = 0.f;
       // Trigger the current step immediately (fall back to root on rests)
-      if (k_hit[step_])
+      if (hit_[step_])
       {
-        note_target_ = params_.root + k_pitch[step_];
+        note_target_ = params_.root + pitch_[step_];
         note_now_ = note_target_;
-        step_accent_ = k_accent[step_] ? 1.f : 0.f;
+        step_accent_ = accent_[step_] ? 1.f : 0.f;
       }
       else
       {
@@ -366,7 +403,6 @@ public:
       if (env_state_ == ENV_IDLE)
         amp_ = 0.f;
       env_state_ = ENV_ATTACK;
-      note_sounding_ = true;
       break;
     case k_unit_touch_phase_moved:
       break;
@@ -386,8 +422,56 @@ private:
     return (60.f / bpm) * k_sr * 0.25f;
   }
 
+  // Regenerate pitch/accent/slide arrays from the PATTERN seed.
+  void regenPattern()
+  {
+    pattern_dirty_ = false;
+    uint32_t state = 0x7F4A7C15u + (uint32_t)(params_.pattern + 1) * 0x9E3779B9u;
+
+    // Bias strongly toward the root & fifth for a driving acid line.
+    for (uint8_t i = 0; i < k_num_steps; ++i)
+    {
+      const uint32_t r = lcg_next(state);
+      uint8_t choice;
+      switch (r & 3u)
+      {
+      case 0:
+      case 1:
+        choice = 0; break;      // root (most common)
+      case 2:
+        choice = 4; break;      // fifth
+      default:
+        choice = 1 + (r >> 8) % 7; break; // other scale degrees
+      }
+      pitch_[i] = k_scale[choice];
+
+      accent_[i] = (lcg_next(state) & 0xFFu) < 112u ? 1 : 0; // ~44% accents
+      slide_[i] = (lcg_next(state) & 0xFFu) < 64u ? 1 : 0;   // ~25% slides
+    }
+    // First step always lands on the root for a solid beat one.
+    pitch_[0] = 0;
+    accent_[0] = 1;
+    slide_[0] = 0;
+  }
+
+  // Regenerate the Euclidean hit pattern from DENSITY (K pulses 1..16).
+  void regenEuclid()
+  {
+    density_dirty_ = false;
+    const uint8_t k = 1 + (uint8_t)((uint32_t)(params_.density & 1023) * 15u / 1023u);
+    euclid(k, k_num_steps, hit_);
+  }
+
   float *buffer_; // valid range:  [buffer_, buffer_ + getBufferSize())
   Params params_;
+
+  // generative pattern (regenerated on knob change)
+  int8_t pitch_[k_num_steps];
+  uint8_t accent_[k_num_steps];
+  uint8_t slide_[k_num_steps];
+  uint8_t hit_[k_num_steps];
+  bool pattern_dirty_;
+  bool density_dirty_;
 
   // sequencer state
   uint8_t step_;
@@ -402,7 +486,6 @@ private:
   enum EnvState : uint8_t { ENV_IDLE, ENV_ATTACK, ENV_DECAY, ENV_RELEASE };
   EnvState env_state_;
   bool gate_;
-  bool note_sounding_;
   float step_accent_;
 
   // filter state

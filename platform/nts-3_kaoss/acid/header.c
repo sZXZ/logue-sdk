@@ -26,8 +26,14 @@ const __unit_header genericfx_unit_header_t unit_header = {
       // WAVE: 0 = Saw, 1 = Square
       {0, 1, 0, 0, k_unit_param_type_strings, 0, 0, 0, {"WAVE"}},
 
-      // ROOT: pattern root note, displayed as musical pitch (C0..G9)
+      // ROOT: bass transposition, displayed as musical pitch (C0..G9)
       {24, 84, 54, 45, k_unit_param_type_midi_note, 0, 0, 0, {"ROOT"}},
+
+      // PATTERN: seed that generates the pitch/accent/slide sequence
+      {0, 1023, 0, 512, k_unit_param_type_none, 0, 0, 0, {"PATTERN"}},
+
+      // DENSITY: Euclidean pulse count (1..16 active steps)
+      {0, 1023, 0, 768, k_unit_param_type_none, 0, 0, 0, {"DENSITY"}},
 
       // CUTOFF: filter base frequency
       {0, 1023, 0, 256, k_unit_param_type_none, 0, 0, 0, {"CUTOFF"}},
@@ -35,17 +41,11 @@ const __unit_header genericfx_unit_header_t unit_header = {
       // RESONANCE: filter emphasis
       {0, 1023, 0, 384, k_unit_param_type_none, 0, 0, 0, {"RESON"}},
 
-      // ENV MOD: how much the envelope pushes the cutoff
-      {0, 1023, 0, 512, k_unit_param_type_none, 0, 0, 0, {"ENV MOD"}},
-
       // DECAY: envelope fall time, 10ms .. 2000ms
       {0, 1023, 0, 384, k_unit_param_type_none, 0, 0, 0, {"DECAY"}},
 
-      // ACCENT: boosts volume and env mod on accented steps
-      {0, 1023, 0, 256, k_unit_param_type_none, 0, 0, 0, {"ACCENT"}},
-
-      // GLIDE: slide time, smooths pitch transitions between notes
-      {0, 1023, 0, 192, k_unit_param_type_none, 0, 0, 0, {"GLIDE"}},
+      // ACID: macro scaling glide time + accent intensity
+      {0, 1023, 0, 384, k_unit_param_type_none, 0, 0, 0, {"ACID"}},
     },
   },
   .default_mappings = {
@@ -54,9 +54,11 @@ const __unit_header genericfx_unit_header_t unit_header = {
 
     // Format: assign, curve, curve polarity, min, max, default value
 
-    // WAVE, ROOT, ENV MOD, DECAY, ACCENT, GLIDE not mapped to pad (edited via menu)
+    // WAVE, ROOT, PATTERN, DENSITY, DECAY, ACID not mapped to pad (edited via menu)
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1, 0},
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 24, 84, 45},
+    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},
+    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 768},
 
     // CUTOFF mapped to X axis of the control pad
     {k_genericfx_param_assign_x, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 256},
@@ -64,9 +66,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
     // RESONANCE mapped to Y axis of the control pad
     {k_genericfx_param_assign_y, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 384},
 
-    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 384},
-    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 256},
-    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 192}
+    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 384}
   }
 };
