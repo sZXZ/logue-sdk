@@ -44,6 +44,13 @@
 
 #include "nts3_clouds.h"
 
+// newlib's vfprintf machinery references the weak `_printf_float` hook from
+// <cstdio> even when only integer format specifiers are used. The NTS-3
+// loader tries to bind that PLT call and fails ("Resolve Symbol"), so we
+// provide a strong internal definition. It is only invoked for float
+// conversions, which this unit never formats (returns 0 as a safe fallback).
+extern "C" int _printf_float(struct _reent *, const char *, ...) { return 0; }
+
 static CloudsEffect s_effect_instance;
 
 // Cached parameter values passed from hardware.
@@ -82,6 +89,15 @@ __unit_callback int8_t unit_init(const unit_runtime_desc_t *desc) {
       return k_unit_err_memory;
     std::fill(buf, buf + s_effect_instance.getBufferSize(), 0.0f);
     s_effect_instance.init(buf);
+
+    // Optional feedback echo line.  The module still loads without it (the
+    // effect simply disables itself), so a tight SDRAM budget never blocks boot.
+    float *fb = (float *)desc->hooks.sdram_alloc(
+        s_effect_instance.getFeedbackBufferSize() * (uint32_t)sizeof(float));
+    if (fb) {
+      std::fill(fb, fb + s_effect_instance.getFeedbackBufferSize(), 0.0f);
+      s_effect_instance.setFeedbackBuffer(fb);
+    }
   } else {
     s_effect_instance.init(nullptr);
   }

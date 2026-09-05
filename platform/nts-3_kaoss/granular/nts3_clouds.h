@@ -47,6 +47,7 @@ struct Grain {
 //    Encoder 2 (PARAM_PITCH)            -> pitch_semi  [-12 .. +12] semitones
 //    Encoder 3 (PARAM_TEXTURE)          -> texture     [0..1]
 //    Encoder 4 (PARAM_FREEZE)           -> freeze      [0 | 1]
+//    8th param (PARAM_FEEDBACK)         -> feedback    [0..1]
 struct CloudParams {
   float position;    // 0 = current input, 1 = furthest back in buffer
   float density;     // signed; magnitude = spawn rate, sign = walk direction
@@ -55,6 +56,7 @@ struct CloudParams {
   float pitch_semi;  // transposition, musical semitones
   float texture;     // 0 = square ... 0.5 = triangle ... 1 = Hann
   int   freeze;      // 0 = record, 1 = freeze (playback only)
+  float feedback;    // wet-signal echo regeneration amount (0..1)
 
   void reset() {
     position   = 0.0f;
@@ -64,6 +66,7 @@ struct CloudParams {
     pitch_semi = 0.0f;   // unison
     texture    = 0.5f;   // triangle
     freeze     = 0;
+    feedback   = 0.0f;   // off
   }
 };
 
@@ -72,6 +75,10 @@ public:
   static constexpr uint32_t kMaxGrains = 24;   // hard polyphony ceiling
   static constexpr float    kBufferSeconds = 1.5f; // SDRAM target duration
   static constexpr uint32_t kSampleRate = 48000;
+  // Feedback echo line length (per channel): 0.25 s @ 48 kHz = 12000 samples.
+  static constexpr uint32_t kFeedbackDelaySamples = 12000u;
+  static constexpr uint32_t getFeedbackBufferSize() { return 2 * kFeedbackDelaySamples; }
+  void setFeedbackBuffer(float *buf) { fb_delay_ = buf; }
 
   enum {
     PARAM_POSITION = 0U, // X axis  -> grain position in buffer
@@ -81,6 +88,7 @@ public:
     PARAM_PITCH,         // Enc 2   -> pitch transpose
     PARAM_TEXTURE,       // Enc 3   -> envelope morph / diffusion
     PARAM_FREEZE,        // Enc 4   -> freeze toggle
+    PARAM_FEEDBACK,      // 8th param -> wet-to-buffer feedback
     NUM_PARAMS
   };
 
@@ -117,6 +125,12 @@ private:
   float    dry_wet_;
   float    position_;
   bool     freeze_;
+  float    feedback_;      // wet echo regeneration amount (0..1)
+
+  // Dedicated regenerating echo delay on the wet bus (optional SDRAM line).
+  float    *fb_delay_;     // [L][R] stereo blocks, or nullptr if unavailable
+  uint32_t fb_size_;       // echo samples per channel
+  uint32_t fb_w_;          // current write/read index of the echo line
 
   // Per-grain pan randomization seed progression
   uint32_t rng_state_;

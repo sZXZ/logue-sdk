@@ -27,60 +27,10 @@
 #include "nts3_clouds.h"
 
 #include <cmath>
+#include <cstdio>
 
+#include "fx_api.h"
 #include "utils/int_math.h"
-
-// ---------------------------------------------------------------------------
-// Minimal unsigned-integer rendering (no stdio on this embedded target).
-// Writes the ASCII digits of `v` into `buf` (must hold up to 10 digits) and
-// returns the number of characters written. Avoids linking newlib's printf
-// machinery (and its weak `_printf_float` hook), which the unit loader cannot
-// bind as a PLT symbol.
-// ---------------------------------------------------------------------------
-static uint32_t render_uint(char *buf, uint32_t v) {
-  char  tmp[10];
-  uint32_t n = 0;
-  do {
-    tmp[n++] = (char)('0' + (v % 10u));
-    v /= 10u;
-  } while (v != 0u);
-  for (uint32_t i = 0u; i < n; ++i)
-    buf[i] = tmp[n - 1u - i];
-  return n;
-}
-
-// ---------------------------------------------------------------------------
-// Self-contained half-period sine table (sin(pi*x), x in [0,1], 129 entries).
-// The grain Hann window is built from this so the unit references no
-// firmware-exported wavetables (keeps the loader's symbol resolution trivial).
-// ---------------------------------------------------------------------------
-static const float s_sin_pi_lut[129] = {
-    0.00000000f, 0.02454123f, 0.04906767f, 0.07356456f, 0.09801714f,
-    0.12241068f, 0.14673047f, 0.17096189f, 0.19509032f, 0.21910124f,
-    0.24298018f, 0.26671276f, 0.29028468f, 0.31368174f, 0.33688985f,
-    0.35989504f, 0.38268343f, 0.40524131f, 0.42755509f, 0.44961133f,
-    0.47139674f, 0.49289819f, 0.51410274f, 0.53499762f, 0.55557023f,
-    0.57580819f, 0.59569930f, 0.61523159f, 0.63439328f, 0.65317284f,
-    0.67155895f, 0.68954054f, 0.70710678f, 0.72424708f, 0.74095113f,
-    0.75720885f, 0.77301045f, 0.78834643f, 0.80320753f, 0.81758481f,
-    0.83146961f, 0.84485357f, 0.85772861f, 0.87008699f, 0.88192126f,
-    0.89322430f, 0.90398929f, 0.91420976f, 0.92387953f, 0.93299280f,
-    0.94154407f, 0.94952818f, 0.95694034f, 0.96377607f, 0.97003125f,
-    0.97570213f, 0.98078528f, 0.98527764f, 0.98917651f, 0.99247953f,
-    0.99518473f, 0.99729046f, 0.99879546f, 0.99969882f, 1.00000000f,
-    0.99969882f, 0.99879546f, 0.99729046f, 0.99518473f, 0.99247953f,
-    0.98917651f, 0.98527764f, 0.98078528f, 0.97570213f, 0.97003125f,
-    0.96377607f, 0.95694034f, 0.94952818f, 0.94154407f, 0.93299280f,
-    0.92387953f, 0.91420976f, 0.90398929f, 0.89322430f, 0.88192126f,
-    0.87008699f, 0.85772861f, 0.84485357f, 0.83146961f, 0.81758481f,
-    0.80320753f, 0.78834643f, 0.77301045f, 0.75720885f, 0.74095113f,
-    0.72424708f, 0.70710678f, 0.68954054f, 0.67155895f, 0.65317284f,
-    0.63439328f, 0.61523159f, 0.59569930f, 0.57580819f, 0.55557023f,
-    0.53499762f, 0.51410274f, 0.49289819f, 0.47139674f, 0.44961133f,
-    0.42755509f, 0.40524131f, 0.38268343f, 0.35989504f, 0.33688985f,
-    0.31368174f, 0.29028468f, 0.26671276f, 0.24298018f, 0.21910124f,
-    0.19509032f, 0.17096189f, 0.14673047f, 0.12241068f, 0.09801714f,
-    0.07356456f, 0.04906767f, 0.02454123f, 0.00000000f};
 
 // ---------------------------------------------------------------------------
 // Buffer size: we target >= 1.5s of stereo audio in SDRAM.
@@ -125,6 +75,10 @@ void CloudsEffect::init(float *allocated_buffer) {
   dry_wet_  = params_.dry_wet;
   position_ = params_.position;
   freeze_   = params_.freeze != 0;
+  feedback_ = params_.feedback;
+  fb_delay_ = nullptr;         // attached later by unit_init() via setFeedbackBuffer()
+  fb_size_  = kFeedbackDelaySamples;
+  fb_w_     = 0;
 }
 
 void CloudsEffect::teardown() {
@@ -139,6 +93,11 @@ void CloudsEffect::reset() {
   spawn_rate_ = 0.0f;
   grain_amp_ = 0.0f;
   walk_dir_ = 1;
+  if (fb_delay_ != nullptr) {
+    for (uint32_t i = 0; i < fb_size_ * 2u; ++i)
+      fb_delay_[i] = 0.0f;
+    fb_w_ = 0;
+  }
   for (uint32_t i = 0; i < kMaxGrains; ++i)
     grains_[i].active = false;
 }
@@ -158,24 +117,11 @@ inline uint32_t CloudsEffect::next_rng() {
 // ---------------------------------------------------------------------------
 // Raised-cosine "Hann" window over [0, length-1] -> [0,1].
 // T = elapsed/length.  Hann = 0.5 - 0.5*cos(2*pi*T) = 0.5 - 0.5*sin(2*pi*(T+0.25)).
-// Uses our own static half-sine LUT (no firmware-exported wavetables).
+// Uses the firmware-exported fast wavetable sine (fx_sinf/fx_cosf).
 // ---------------------------------------------------------------------------
 inline float CloudsEffect::hann_envelope(uint32_t elapsed, uint32_t length) const {
   const float t = (float)elapsed * (1.0f / (float)length);
-  const float phase = t + 0.25f;
-  const float p = phase - (float)(uint32_t)phase;   // wrap to [0,1)
-
-  // half-period table: sin(2*pi*p) for p<0.5 indexes [0,128), negate beyond.
-  const float x0f = 2.0f * p * 128.0f;
-  const uint32_t x0p = (uint32_t)x0f;
-  const uint32_t x0 = x0p & 127u;
-  const uint32_t x1 = (x0 + 1u) & 127u;
-  float syn = s_sin_pi_lut[x0] +
-              (s_sin_pi_lut[x1] - s_sin_pi_lut[x0]) * (x0f - (float)x0p);
-  if (x0p >= 128u)
-    syn = -syn;
-
-  return 0.5f - 0.5f * syn;
+  return 0.5f - 0.5f * fx_sinf(t + 0.25f);
 }
 
 // ---------------------------------------------------------------------------
@@ -255,10 +201,12 @@ inline void CloudsEffect::spawn_grain() {
 
   // Randomised pan for a wide stereo image, scaled by overlap-compensating
   // amplitude so that sparse and dense clouds sit at similar loudness.
+  // fx_cosf/fx_sinf evaluate cos/sin of 2*pi*x: cos(pi/2*u)=fx_cosf(0.25*u),
+  // sin(pi/2*u)=fx_sinf(0.25*u), with u in [0,1] (equal-power pan).
   const float pane_l = ((r >> 24) & 0xFF) * (1.0f / 255.0f); // 0..1
-  const float ang = pane_l * 1.57079632679f;                 // 0..pi/2
-  g.pan_l = std::cos(ang) * grain_amp_;
-  g.pan_r = std::sin(ang) * grain_amp_;
+  const float ang = pane_l * 0.25f;                           // quarter turn
+  g.pan_l = fx_cosf(ang) * grain_amp_;
+  g.pan_r = fx_sinf(ang) * grain_amp_;
 
   g.active  = true;
   ++active_grains_;
@@ -292,6 +240,9 @@ void CloudsEffect::setParameter(uint8_t id, int32_t value) {
     case PARAM_FREEZE:   // Encoder 4: freeze toggle
       params_.freeze = value > 0 ? 1 : 0;
       break;
+    case PARAM_FEEDBACK:  // 8th param: wet-signal echo regeneration amount
+      params_.feedback = (float)clipminmaxi32(0, value, 1023) * (1.0f / 1023.0f);
+      break;
     default:
       break;
   }
@@ -305,18 +256,11 @@ const char *CloudsEffect::getParameterStrValue(uint8_t id, int32_t value) const 
     case PARAM_SIZE: {  // mirror the log-size mapping used in setParameter()
       const float n = (float)clipminmaxi32(0, value, 1023) * (1.0f / 1023.0f);
       const float ms = std::exp(-2.3025851f + n * 9.2102403f); // e^-2.3 .. e^6.9
-      char *p = str_buf;
-      if (ms < 10.0f) {
-        const int  ims = (int)(ms * 10.0f);
-        p += render_uint(p, (uint32_t)(ims / 10));
-        *p++ = '.';
-        *p++ = (char)('0' + (ims % 10));
-      } else {
-        p += render_uint(p, (uint32_t)ms);
-      }
-      p[0] = 'm';
-      p[1] = 's';
-      p[2] = '\0';
+      const int  ims = (ms < 10.0f) ? (int)(ms * 10.0f) : (int)ms;
+      if (ms < 10.0f)
+        std::snprintf(str_buf, sizeof(str_buf), "%d.%1dms", ims / 10, ims % 10);
+      else
+        std::snprintf(str_buf, sizeof(str_buf), "%dms", ims);
       return str_buf;
     }
     default:
@@ -347,16 +291,18 @@ void CloudsEffect::process(const float *__restrict in, float *__restrict out,
   // --- cache control values for this block (K-rate) -------------------------
   size_samples_ = params_.size_ms * 0.001f * (float)kSampleRate;
 
-  // pitch_semi/12 in [-1,1]; 2^p via exp(p*ln2). We avoid the fx_pow2f LUT:
-  // the NTS-3 runtime does not export pow2_lut_f, so referencing it fails to
-  // resolve at load time. expf comes from libm (statically linked).
+  // pitch_semi/12 in [-1,1]; 2^p via the firmware-exported pow2 LUT
+  // (fx_pow2f valid for [0,3], mirror negative exponents with a reciprocal).
   const float p = params_.pitch_semi * (1.0f / 12.0f);
-  speed_ = std::exp(p * 0.6931471805599453f);   // 2^p, range 0.5 .. 2.0
+  speed_ = (p >= 0.0f) ? fx_pow2f(p) : (1.0f / fx_pow2f(-p));
 
   texture_  = params_.texture;
   dry_wet_  = params_.dry_wet;
   position_ = params_.position;
   freeze_   = params_.freeze != 0;
+
+  // Linear re-injection amount (0..1) for a clearly audible level.
+  feedback_ = params_.feedback;
 
   // Density -> grains/second. |density| in [0,1]; square for a smooth taper,
   // scaled to a musically useful maximum spawn rate.
@@ -382,6 +328,9 @@ void CloudsEffect::process(const float *__restrict in, float *__restrict out,
     const float in_r = in_p[1];
 
     // --- 1. record ----------------------------------------------------------
+    // Freeze is a hard hold: the buffer is left untouched so the cloud keeps
+    // granulating the exact captured tail. Feedback lives on an independent
+    // wet echo (step 5), so freeze and feedback never fight over the buffer.
     if (!freeze_) {
       buffer_[write_pos_]             = in_l;
       buffer_[buffer_size_ + write_pos_] = in_r;
@@ -440,7 +389,29 @@ void CloudsEffect::process(const float *__restrict in, float *__restrict out,
 
     // --- 4. dry/wet mix (soft-clip the wet bus as a safety net) -------------
     const float dry = (1.0f - dry_wet_);
-    out_p[0] = in_l * dry + fx_softclipf(0.3333333f, wet_l) * dry_wet_;
-    out_p[1] = in_r * dry + fx_softclipf(0.3333333f, wet_r) * dry_wet_;
+    float wet_lc = fx_softclipf(0.3333333f, wet_l);
+    float wet_rc = fx_softclipf(0.3333333f, wet_r);
+
+    // --- 5. feedback: regenerating echo of the wet signal -------------------
+    // A short dedicated delay line (separate from the record buffer) keeps the
+    // echo alive in freeze mode without disturbing the frozen buffer.
+    //   read oldest sample at fb_w_, then write wet + oldest * feedback there
+    //   output wet += oldest              -> one regenerating tap per pass
+    if (fb_delay_ != nullptr && feedback_ > 0.0f) {
+      const float e_l = fb_delay_[fb_w_];
+      const float e_r = fb_delay_[fb_size_ + fb_w_];
+      fb_delay_[fb_w_] = wet_lc + e_l * feedback_;
+      fb_delay_[fb_size_ + fb_w_] = wet_rc + e_r * feedback_;
+      ++fb_w_;
+      if (fb_w_ >= fb_size_)
+        fb_w_ = 0;
+      wet_lc += e_l;
+      wet_rc += e_r;
+      wet_lc = fx_softclipf(0.3333333f, wet_lc);
+      wet_rc = fx_softclipf(0.3333333f, wet_rc);
+    }
+
+    out_p[0] = in_l * dry + wet_lc * dry_wet_;
+    out_p[1] = in_r * dry + wet_rc * dry_wet_;
   }
 }
