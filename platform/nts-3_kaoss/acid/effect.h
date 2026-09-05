@@ -86,9 +86,9 @@ public:
   struct Params
   {
     float wave;     // 0 = Saw, 1 = Square
-    float root;     // MIDI note number 24..84 (bass transposition)
+    float root;     // MIDI note 0..127 (from the 0..1023 ROOT knob)
     int32_t pattern; // seed 0..1023
-    int32_t density; // 0..1023 -> K pulses 1..16
+    int32_t density; // Euclidean pulse count 1..16
     float cutoff;   // 0..1
     float resonance;// 0..1
     float decay;    // 0..1 (10ms .. 2000ms)
@@ -99,7 +99,7 @@ public:
       wave = 0.f;
       root = 45.f;          // A2
       pattern = 512;
-      density = 768;        // ~12 hits
+      density = 12;
       cutoff = 256.f / 1023.f;
       resonance = 384.f / 1023.f;
       decay = 384.f / 1023.f;
@@ -458,7 +458,11 @@ private:
   void regenEuclid()
   {
     density_dirty_ = false;
-    const uint8_t k = 1 + (uint8_t)((uint32_t)(params_.density & 1023) * 15u / 1023u);
+    uint8_t k = (uint8_t)params_.density;
+    if (k < 1)
+      k = 1;
+    if (k > k_num_steps)
+      k = k_num_steps;
     euclid(k, k_num_steps, hit_);
   }
 

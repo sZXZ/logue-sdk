@@ -33,7 +33,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
       {0, 1023, 0, 512, k_unit_param_type_none, 0, 0, 0, {"PATTERN"}},
 
       // DENSITY: Euclidean pulse count (1..16 active steps)
-      {0, 1023, 0, 768, k_unit_param_type_none, 0, 0, 0, {"DENSITY"}},
+      {1, 16, 8, 12, k_unit_param_type_enum, 0, 0, 0, {"DENSITY"}},
 
       // CUTOFF: filter base frequency
       {0, 1023, 0, 256, k_unit_param_type_none, 0, 0, 0, {"CUTOFF"}},
@@ -58,7 +58,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1, 0},
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 24, 84, 45},
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},
-    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 768},
+    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 1, 16, 12},
 
     // CUTOFF mapped to X axis of the control pad
     {k_genericfx_param_assign_x, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 256},
@@ -66,7 +66,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
     // RESONANCE mapped to Y axis of the control pad
     {k_genericfx_param_assign_y, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 384},
 
-    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 384},
+    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 2000, 500},
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 384}
   }
 };
