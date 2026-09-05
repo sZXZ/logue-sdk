@@ -284,11 +284,8 @@ void CloudsEffect::setParameter(uint8_t id, int32_t value) {
       break;
     }
     case PARAM_PITCH:    // Encoder 2: musical transpose -12 .. +12 semitones
-    {
-      const float n = (float)clipminmaxi32(0, value, 1023) * (1.0f / 1023.0f);
-      params_.pitch_semi = (n * 2.0f - 1.0f) * 12.0f;   // -12 .. +12
+      params_.pitch_semi = (float)clipminmaxi32(-12, value, 12);
       break;
-    }
     case PARAM_TEXTURE:  // Encoder 3: envelope morph 0..1
       params_.texture = (float)clipminmaxi32(0, value, 1023) * (1.0f / 1023.0f);
       break;
@@ -322,26 +319,9 @@ const char *CloudsEffect::getParameterStrValue(uint8_t id, int32_t value) const 
       p[2] = '\0';
       return str_buf;
     }
-    case PARAM_PITCH: {  // mirror the semitone mapping used in setParameter()
-      const float n  = (float)clipminmaxi32(0, value, 1023) * (1.0f / 1023.0f);
-      const float st = (n * 2.0f - 1.0f) * 12.0f;         // -12 .. +12
-      const int   ist = (int)(st < 0.0f ? st - 0.5f : st + 0.5f);
-      if (ist == 0)
-        return "Unison";
-      char *p = str_buf;
-      if (ist < 0) {
-        *p++ = '-';
-        p += render_uint(p, (uint32_t)(-ist));
-      } else {
-        *p++ = '+';
-        p += render_uint(p, (uint32_t)ist);
-      }
-      p[0] = 's';
-      p[1] = 't';
-      p[2] = '\0';
-      return str_buf;
-    }
     default:
+      // PITCH uses k_unit_param_type_semi: the device renders the raw
+      // semitone value natively ("+7", "-3"), so no string is needed here.
       return nullptr;
   }
 }

@@ -69,8 +69,8 @@ const __unit_header genericfx_unit_header_t unit_header = {
       // Encoder 1: grain size in ms.
       {0, 1023, 0, 470,  k_unit_param_type_strings, 0, 0, 0, {"SIZE"}},
 
-      // Encoder 2: pitch transpose (string display: "Unison"/"-2 st"...).
-      {0, 1023, 0, 512,  k_unit_param_type_strings, 0, 0, 0, {"PITCH"}},
+      // Encoder 2: pitch transpose in semitones (-12 .. +12, 0 = unison).
+      {-12, 12, 0, 0, k_unit_param_type_semi, 0, 0, 0, {"PITCH"}},
 
       // Encoder 3: envelope texture (square -> triangle -> Hann).
       {0, 1023, 0, 512,  k_unit_param_type_none, 0, 0, 0, {"TEXTURE"}},
@@ -88,7 +88,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
     {k_genericfx_param_assign_y,     k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},  // DENSITY
     {k_genericfx_param_assign_depth, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 1023}, // DEPTH
     {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 470},  // SIZE
-    {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},  // PITCH
+    {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, -12, 12, 0},     // PITCH
     {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},  // TEXTURE
     {k_genericfx_param_assign_none,  k_genericfx_curve_toggle, k_genericfx_curve_unipolar, 0, 1, 0},       // FREEZE
     {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 0, 0},       // unused
