@@ -41,7 +41,6 @@
 #include "unit_genericfx.h"
 #include "utils/int_math.h"
 #include <algorithm>
-#include <climits>
 
 #include "nts3_clouds.h"
 
@@ -72,25 +71,24 @@ __unit_callback int8_t unit_init(const unit_runtime_desc_t *desc) {
   if (desc->input_channels != 2 || desc->output_channels != 2)
     return k_unit_err_geometry;
 
-  // SDRAM buffer allocation must be available (granular buffer lives here).
+  // The granular buffer lives in SDRAM.
   if (!desc->hooks.sdram_alloc)
     return k_unit_err_memory;
 
-  {
-    const uint32_t bytes =
-        s_effect_instance.getBufferSize() * (uint32_t)sizeof(float);
-    float *buf = (float *)desc->hooks.sdram_alloc(bytes);
+  if (s_effect_instance.getBufferSize() > 0) {
+    float *buf = (float *)desc->hooks.sdram_alloc(
+        s_effect_instance.getBufferSize() * (uint32_t)sizeof(float));
     if (!buf)
       return k_unit_err_memory;
-
-    // Clear the buffer (avoids clicks/blasts on first playback).
     std::fill(buf, buf + s_effect_instance.getBufferSize(), 0.0f);
     s_effect_instance.init(buf);
+  } else {
+    s_effect_instance.init(nullptr);
   }
 
   // Initialise cached parameter values to defaults from the header.
-  for (uint32_t id = 0; id < UNIT_GENERICFX_MAX_PARAM_COUNT; ++id)
-    cached_values[id] = unit_header.common.params[id].init;
+  for (int id = 0; id < UNIT_GENERICFX_MAX_PARAM_COUNT; ++id)
+    cached_values[id] = (int32_t)unit_header.common.params[id].init;
 
   return k_unit_err_none;
 }
@@ -112,8 +110,6 @@ __unit_callback void unit_render(const float *in, float *out, uint32_t frames) {
 }
 
 __unit_callback void unit_set_param_value(uint8_t id, int32_t value) {
-  if (id >= CloudsEffect::NUM_PARAMS)
-    return;
   value = clipminmaxi32(unit_header.common.params[id].min, value,
                         unit_header.common.params[id].max);
   cached_values[id] = value;
@@ -121,14 +117,10 @@ __unit_callback void unit_set_param_value(uint8_t id, int32_t value) {
 }
 
 __unit_callback int32_t unit_get_param_value(uint8_t id) {
-  if (id >= CloudsEffect::NUM_PARAMS)
-    return INT_MIN;
   return cached_values[id];
 }
 
 __unit_callback const char *unit_get_param_str_value(uint8_t id, int32_t value) {
-  if (id >= CloudsEffect::NUM_PARAMS)
-    return nullptr;
   value = clipminmaxi32(unit_header.common.params[id].min, value,
                         unit_header.common.params[id].max);
   return s_effect_instance.getParameterStrValue(id, value);

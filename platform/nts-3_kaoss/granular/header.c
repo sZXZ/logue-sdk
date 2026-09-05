@@ -51,7 +51,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
     .unit_id = 0x10U,                                         // unit ID
     .version = 0x00010000U,                                   // 1.0.0
     .name = "NTS3 Clouds",                                    // shown on device
-    .num_params = 7,                                          // number of params
+    .num_params = 8,                                          // number of params
 
     .params = {
       // Format: min, max, center (unused), default, type, frac bits,
@@ -77,6 +77,9 @@ const __unit_header genericfx_unit_header_t unit_header = {
 
       // Encoder 4: freeze (toggle: 0 = record, 1 = playback-only).
       {0, 1,    0, 0,    k_unit_param_type_onoff, 0, 0, 0, {"FREEZE"}},
+
+      // Unused parameter slot (kept so the descriptor array is fully defined).
+      {0, 0, 0, 0,       k_unit_param_type_none, 0, 0, 0, {""}},
     },
   },
   .default_mappings = {
@@ -88,5 +91,6 @@ const __unit_header genericfx_unit_header_t unit_header = {
     {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},  // PITCH
     {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},  // TEXTURE
     {k_genericfx_param_assign_none,  k_genericfx_curve_toggle, k_genericfx_curve_unipolar, 0, 1, 0},       // FREEZE
+    {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 0, 0},       // unused
   }
 };

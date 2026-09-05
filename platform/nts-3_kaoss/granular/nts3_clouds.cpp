@@ -27,9 +27,60 @@
 #include "nts3_clouds.h"
 
 #include <cmath>
-#include <cstdio>
 
 #include "utils/int_math.h"
+
+// ---------------------------------------------------------------------------
+// Minimal unsigned-integer rendering (no stdio on this embedded target).
+// Writes the ASCII digits of `v` into `buf` (must hold up to 10 digits) and
+// returns the number of characters written. Avoids linking newlib's printf
+// machinery (and its weak `_printf_float` hook), which the unit loader cannot
+// bind as a PLT symbol.
+// ---------------------------------------------------------------------------
+static uint32_t render_uint(char *buf, uint32_t v) {
+  char  tmp[10];
+  uint32_t n = 0;
+  do {
+    tmp[n++] = (char)('0' + (v % 10u));
+    v /= 10u;
+  } while (v != 0u);
+  for (uint32_t i = 0u; i < n; ++i)
+    buf[i] = tmp[n - 1u - i];
+  return n;
+}
+
+// ---------------------------------------------------------------------------
+// Self-contained half-period sine table (sin(pi*x), x in [0,1], 129 entries).
+// The grain Hann window is built from this so the unit references no
+// firmware-exported wavetables (keeps the loader's symbol resolution trivial).
+// ---------------------------------------------------------------------------
+static const float s_sin_pi_lut[129] = {
+    0.00000000f, 0.02454123f, 0.04906767f, 0.07356456f, 0.09801714f,
+    0.12241068f, 0.14673047f, 0.17096189f, 0.19509032f, 0.21910124f,
+    0.24298018f, 0.26671276f, 0.29028468f, 0.31368174f, 0.33688985f,
+    0.35989504f, 0.38268343f, 0.40524131f, 0.42755509f, 0.44961133f,
+    0.47139674f, 0.49289819f, 0.51410274f, 0.53499762f, 0.55557023f,
+    0.57580819f, 0.59569930f, 0.61523159f, 0.63439328f, 0.65317284f,
+    0.67155895f, 0.68954054f, 0.70710678f, 0.72424708f, 0.74095113f,
+    0.75720885f, 0.77301045f, 0.78834643f, 0.80320753f, 0.81758481f,
+    0.83146961f, 0.84485357f, 0.85772861f, 0.87008699f, 0.88192126f,
+    0.89322430f, 0.90398929f, 0.91420976f, 0.92387953f, 0.93299280f,
+    0.94154407f, 0.94952818f, 0.95694034f, 0.96377607f, 0.97003125f,
+    0.97570213f, 0.98078528f, 0.98527764f, 0.98917651f, 0.99247953f,
+    0.99518473f, 0.99729046f, 0.99879546f, 0.99969882f, 1.00000000f,
+    0.99969882f, 0.99879546f, 0.99729046f, 0.99518473f, 0.99247953f,
+    0.98917651f, 0.98527764f, 0.98078528f, 0.97570213f, 0.97003125f,
+    0.96377607f, 0.95694034f, 0.94952818f, 0.94154407f, 0.93299280f,
+    0.92387953f, 0.91420976f, 0.90398929f, 0.89322430f, 0.88192126f,
+    0.87008699f, 0.85772861f, 0.84485357f, 0.83146961f, 0.81758481f,
+    0.80320753f, 0.78834643f, 0.77301045f, 0.75720885f, 0.74095113f,
+    0.72424708f, 0.70710678f, 0.68954054f, 0.67155895f, 0.65317284f,
+    0.63439328f, 0.61523159f, 0.59569930f, 0.57580819f, 0.55557023f,
+    0.53499762f, 0.51410274f, 0.49289819f, 0.47139674f, 0.44961133f,
+    0.42755509f, 0.40524131f, 0.38268343f, 0.35989504f, 0.33688985f,
+    0.31368174f, 0.29028468f, 0.26671276f, 0.24298018f, 0.21910124f,
+    0.19509032f, 0.17096189f, 0.14673047f, 0.12241068f, 0.09801714f,
+    0.07356456f, 0.04906767f, 0.02454123f, 0.00000000f};
 
 // ---------------------------------------------------------------------------
 // Buffer size: we target >= 1.5s of stereo audio in SDRAM.
@@ -106,13 +157,25 @@ inline uint32_t CloudsEffect::next_rng() {
 
 // ---------------------------------------------------------------------------
 // Raised-cosine "Hann" window over [0, length-1] -> [0,1].
-// T = elapsed/length.  Hann = 0.5 - 0.5*cos(2*pi*T).
-// Uses the SDK's LUT-based sine (fx_sinf) for a cheap per-sample eval.
+// T = elapsed/length.  Hann = 0.5 - 0.5*cos(2*pi*T) = 0.5 - 0.5*sin(2*pi*(T+0.25)).
+// Uses our own static half-sine LUT (no firmware-exported wavetables).
 // ---------------------------------------------------------------------------
 inline float CloudsEffect::hann_envelope(uint32_t elapsed, uint32_t length) const {
   const float t = (float)elapsed * (1.0f / (float)length);
-  // cos(2*pi*t) == sin(2*pi*(t + 0.25))
-  return 0.5f - 0.5f * fx_sinf(t + 0.25f);
+  const float phase = t + 0.25f;
+  const float p = phase - (float)(uint32_t)phase;   // wrap to [0,1)
+
+  // half-period table: sin(2*pi*p) for p<0.5 indexes [0,128), negate beyond.
+  const float x0f = 2.0f * p * 128.0f;
+  const uint32_t x0p = (uint32_t)x0f;
+  const uint32_t x0 = x0p & 127u;
+  const uint32_t x1 = (x0 + 1u) & 127u;
+  float syn = s_sin_pi_lut[x0] +
+              (s_sin_pi_lut[x1] - s_sin_pi_lut[x0]) * (x0f - (float)x0p);
+  if (x0p >= 128u)
+    syn = -syn;
+
+  return 0.5f - 0.5f * syn;
 }
 
 // ---------------------------------------------------------------------------
@@ -245,11 +308,18 @@ const char *CloudsEffect::getParameterStrValue(uint8_t id, int32_t value) const 
     case PARAM_SIZE: {  // mirror the log-size mapping used in setParameter()
       const float n = (float)clipminmaxi32(0, value, 1023) * (1.0f / 1023.0f);
       const float ms = std::exp(-2.3025851f + n * 9.2102403f); // e^-2.3 .. e^6.9
-      const int  ims = (ms < 10.0f) ? (int)(ms * 10.0f) : (int)ms;
-      if (ms < 10.0f)
-        std::snprintf(str_buf, sizeof(str_buf), "%d.%1dms", ims / 10, ims % 10);
-      else
-        std::snprintf(str_buf, sizeof(str_buf), "%dms", ims);
+      char *p = str_buf;
+      if (ms < 10.0f) {
+        const int  ims = (int)(ms * 10.0f);
+        p += render_uint(p, (uint32_t)(ims / 10));
+        *p++ = '.';
+        *p++ = (char)('0' + (ims % 10));
+      } else {
+        p += render_uint(p, (uint32_t)ms);
+      }
+      p[0] = 'm';
+      p[1] = 's';
+      p[2] = '\0';
       return str_buf;
     }
     case PARAM_PITCH: {  // mirror the semitone mapping used in setParameter()
@@ -258,7 +328,17 @@ const char *CloudsEffect::getParameterStrValue(uint8_t id, int32_t value) const 
       const int   ist = (int)(st < 0.0f ? st - 0.5f : st + 0.5f);
       if (ist == 0)
         return "Unison";
-      std::snprintf(str_buf, sizeof(str_buf), "%+dst", ist);
+      char *p = str_buf;
+      if (ist < 0) {
+        *p++ = '-';
+        p += render_uint(p, (uint32_t)(-ist));
+      } else {
+        *p++ = '+';
+        p += render_uint(p, (uint32_t)ist);
+      }
+      p[0] = 's';
+      p[1] = 't';
+      p[2] = '\0';
       return str_buf;
     }
     default:
