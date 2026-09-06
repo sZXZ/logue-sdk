@@ -11,7 +11,7 @@ Generative TB-303-style acid synthesizer implemented as an NTS-3 kaoss pad gener
 | **5** | CUTOFF | `0`–`1023` | `k_unit_param_type_none` | `256` | Base cutoff frequency (exponential scale ~30 Hz – 15 kHz). Mapped to the KAOSS X-axis. |
 | **6** | RESON | `0`–`1023` | `k_unit_param_type_none` | `384` | Filter resonance (feedback up to ~3.5, self-oscillating near the top). Mapped to the KAOSS Y-axis. |
 | **7** | DECAY | `0`–`2000` | `k_unit_param_type_msec` | `500` | Envelope fall time, displayed in milliseconds (0–2000 ms). |
-| **8** | ACID | `0`–`1023` | `k_unit_param_type_none` | `384` | Macro scaling **glide time** (0–150 ms) and **accent intensity** (volume / brightness / decay punch). |
+| **8** | ACID | `0`–`1023` | `k_unit_param_type_none` | `384` | Unit-defining macro: scales filter squelch (resonance + cutoff env sweep up to ~5.6 kHz), glide time (0–150 ms) and accent punch (volume / brightness / decay / snappier release). |
 
 The `k_unit_param_type_msec` descriptor can express values larger than the usual 10-bit knob range (up to 2000 here); only the pad/x-y assigned knobs follow the 0–1023 convention.
 

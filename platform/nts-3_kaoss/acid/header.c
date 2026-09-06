@@ -60,13 +60,13 @@ const __unit_header genericfx_unit_header_t unit_header = {
     {k_genericfx_param_assign_depth, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 1, 16, 12},
 
-    // CUTOFF mapped to X axis of the control pad
-    {k_genericfx_param_assign_x, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 256},
+    // CUTOFF mapped to Y axis of the control pad
+    {k_genericfx_param_assign_y, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 256},
 
-    // RESONANCE mapped to Y axis of the control pad
-    {k_genericfx_param_assign_y, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 384},
+    // RESONANCE mapped to X axis of the control pad
+    {k_genericfx_param_assign_x, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 400, 1023, 384},
 
-    {k_genericfx_param_assign_none, k_genericfx_curve_exp, k_genericfx_curve_unipolar, 0, 2000, 500},
-    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 384}
+    {k_genericfx_param_assign_x, k_genericfx_curve_exp, k_genericfx_curve_unipolar, 0, 2000, 500},
+    {k_genericfx_param_assign_x, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 384}
   }
 };

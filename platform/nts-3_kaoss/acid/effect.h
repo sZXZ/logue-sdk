@@ -19,8 +19,9 @@
  *
  *  The clock keeps running whenever tempo is applied, but audio only sounds
  *  while the KAOSS pad is touched. X axis sweeps filter cutoff, Y axis the
- *  resonance. "ACID" is a macro that scales both the glide time and the
- *  intensity of sequenced accents (volume / brightness / decay punch).
+ *  resonance. "ACID" is a strong macro that scales the filter squelch
+ *  (resonance + cutoff sweep), glide time, and the punch of sequenced accents
+ *  (volume / brightness / decay / release snappiness).
  */
 #include "processor.h"
 #include "unit_genericfx.h"
@@ -231,27 +232,30 @@ public:
     // bassline harmonics and was barely audible).
     const float kfb = 30.f * fasterexpf(6.215f * clip01f(p.cutoff));
 
-    // Resonance feedback: max ~3.5 drives the ladder into strong self-
-    // oscillation near the top (max 1.6 was far below the ringing threshold).
-    const float fb = 3.5f * clip01f(p.resonance);
-
-    // ACID macro: maps 0..1 to glide time 0..150 ms.
+    // ACID macro: the unit's namesake — a strong global lever that scales the
+    // filter squelch (resonance + env sweep), accent punch, and glide.
     const float acid = clip01f(p.acid);
+
+    // Resonance feedback: max ~3.5 drives the ladder into strong self-
+    // oscillation near the top; ACID piles on extra squelch on top of that.
+    const float fb = 3.5f * clip01f(p.resonance) * (0.8f + 0.6f * acid);
+
+    // Glide (portamento) time, 0 .. 150 ms scaled by ACID.
     const float glide_ms = 0.150f * acid + 0.0005f; // avoid a zero time constant
 
     // Envelope linear increment per sample.
     // Attack ~1.2 ms constant-increment ramp, decay 10 ms .. 2000 ms,
-    // release ~25 ms (reduced by ACID for snappier accents).
+    // release 35 ms .. 12.5 ms (snapped down by ACID for snappier accents).
     const float atk_inc = k_sr_recip / 0.0012f;
-    const float dec_inc = k_sr_recip / (0.010f + 1.990f * p.decay);
-    const float rel_inc = k_sr_recip / (0.025f * (1.f + 0.5f * acid));
+    const float dec_inc = k_sr_recip / (0.010f + 1.990f * p.decay * (1.25f - 0.5f * acid));
+    const float rel_inc = k_sr_recip / (0.025f * (1.4f - 0.9f * acid));
 
-    // Glide (portamento) time, 0 .. 150 ms scaled by ACID.
+    // Glide time constant, derived from the ACID-mapped glide_ms.
     const float kg = 1.f - fasterexpf(-k_sr_recip / glide_ms);
 
-    // VCF envelope modulation: sweeps the filter up from the (low) base so the
-    // knob stays in charge of the character; boosted by ACID on accents.
-    const float env_amount = 4000.f * (0.35f + 0.65f * acid);
+    // VCF envelope modulation: sweeps the filter up from the base cutoff; the
+    // sweep grows strongly with ACID — the core acid "squelch" lever.
+    const float env_amount = 4000.f * (0.2f + 1.2f * acid);
 
     for (const float *out_end = out + frames * 2; out != out_end; in += 2, out += 2)
     {
@@ -321,8 +325,8 @@ public:
         break;
       }
 
-      // Accent: louder + brighter, boosted by ACID intensity.
-      const float acc_boost = 1.f + (0.9f * acid) * (0.4f + step_accent_);
+      // Accent: louder + brighter, punched harder by ACID intensity.
+      const float acc_boost = 1.f + acid * (0.35f + 1.3f * step_accent_);
 
       // --- Glide: one-pole smoothing toward the target note ------------------
       note_now_ += kg * (note_target_ - note_now_);
