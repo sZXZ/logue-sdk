@@ -118,7 +118,7 @@ public:
       break;
 
     case PARAM_ROOT:
-      params_.root = static_cast<float>(value); // MIDI note 24..84
+      params_.root = value * 127 / 1023; // MIDI note 24..84
       break;
 
     case PARAM_PATTERN:

@@ -108,7 +108,6 @@ __unit_callback int32_t unit_get_param_value(uint8_t id)
 
 __unit_callback const char *unit_get_param_str_value(uint8_t id, int32_t value)
 {
-  value = clipminmaxi32(unit_header.common.params[id].min, value, unit_header.common.params[id].max); // just in case
   return s_effect_instance.getParameterStrValue(id, value);
 }
 
