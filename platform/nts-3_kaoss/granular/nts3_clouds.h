@@ -43,7 +43,7 @@ struct Grain {
 //    X axis  (mapped to PARAM_POSITION) -> position    [0..1]
 //    Y axis  (mapped to PARAM_DENSITY)  -> density     [-1..+1, 0 = silence]
 //    FX depth (mapped to DEPTH)         -> dry_wet     [0..1]
-//    Encoder 1 (PARAM_SIZE)             -> size_ms     [~0.1 .. 1000] ms
+//    Encoder 1 (PARAM_SIZE)             -> size_ms     [0 .. 4000] ms
 //    Encoder 2 (PARAM_PITCH)            -> pitch_semi  [-12 .. +12] semitones
 //    Encoder 3 (PARAM_TEXTURE)          -> texture     [0..1]
 //    Encoder 4 (PARAM_FREEZE)           -> freeze      [0 | 1]
@@ -52,7 +52,7 @@ struct CloudParams {
   float position;    // 0 = current input, 1 = furthest back in buffer
   float density;     // signed; magnitude = spawn rate, sign = walk direction
   float dry_wet;     // 0 = fully dry, 1 = fully wet
-  float size_ms;     // grain length
+  float size_ms;     // grain length, milliseconds (linear, equals raw param value)
   float pitch_semi;  // transposition, musical semitones
   float texture;     // 0 = square ... 0.5 = triangle ... 1 = Hann
   int   freeze;      // 0 = record, 1 = freeze (playback only)
@@ -62,7 +62,7 @@ struct CloudParams {
     position   = 0.0f;
     density    = 0.0f;   // silence by default (vertical centre)
     dry_wet    = 1.0f;   // fully wet on load
-    size_ms    = 100.0f;
+    size_ms    = 1000.0f;
     pitch_semi = 0.0f;   // unison
     texture    = 0.5f;   // triangle
     freeze     = 0;
@@ -73,7 +73,8 @@ struct CloudParams {
 class CloudsEffect : public Processor {
 public:
   static constexpr uint32_t kMaxGrains = 24;   // hard polyphony ceiling
-  static constexpr float    kBufferSeconds = 1.5f; // SDRAM target duration
+  static constexpr uint32_t kMaxSizeMs  = 4000; // largest grain size, ms (matches header range)
+  static constexpr float    kBufferSeconds = 4.0f; // SDRAM target duration (>= kMaxSizeMs/1000)
   static constexpr uint32_t kSampleRate = 48000;
   // Feedback echo line length (per channel): 0.25 s @ 48 kHz = 12000 samples.
   static constexpr uint32_t kFeedbackDelaySamples = 12000u;

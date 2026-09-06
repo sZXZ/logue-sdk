@@ -226,9 +226,8 @@ void CloudsEffect::setParameter(uint8_t id, int32_t value) {
     case DEPTH:          // FX depth -> dry/wet 0..1
       params_.dry_wet = (float)clipminmaxi32(0, value, 1023) * (1.0f / 1023.0f);
       break;
-    case PARAM_SIZE: {   // Encoder 1: logarithmic grain size 0.1ms .. 1000ms
-      const float n = (float)clipminmaxi32(0, value, 1023) * (1.0f / 1023.0f);
-      params_.size_ms = std::exp(-2.3025851f + n * 9.2102403f); // e^-2.3 .. e^6.9
+    case PARAM_SIZE: {   // Encoder 1: linear grain size 0 .. 4000 ms
+      params_.size_ms = (float)clipminmaxi32(0, value, (int32_t)kMaxSizeMs);
       break;
     }
     case PARAM_PITCH:    // Encoder 2: musical transpose -12 .. +12 semitones
@@ -249,25 +248,11 @@ void CloudsEffect::setParameter(uint8_t id, int32_t value) {
 }
 
 const char *CloudsEffect::getParameterStrValue(uint8_t id, int32_t value) const {
-  // Strings must remain valid until the next call to this function.
-  static char str_buf[24];
-
-  switch (id) {
-    case PARAM_SIZE: {  // mirror the log-size mapping used in setParameter()
-      const float n = (float)clipminmaxi32(0, value, 1023) * (1.0f / 1023.0f);
-      const float ms = std::exp(-2.3025851f + n * 9.2102403f); // e^-2.3 .. e^6.9
-      const int  ims = (ms < 10.0f) ? (int)(ms * 10.0f) : (int)ms;
-      if (ms < 10.0f)
-        std::snprintf(str_buf, sizeof(str_buf), "%d.%1dms", ims / 10, ims % 10);
-      else
-        std::snprintf(str_buf, sizeof(str_buf), "%dms", ims);
-      return str_buf;
-    }
-    default:
-      // PITCH uses k_unit_param_type_semi: the device renders the raw
-      // semitone value natively ("+7", "-3"), so no string is needed here.
-      return nullptr;
-  }
+  (void)id;
+  (void)value;
+  // SIZE is k_unit_param_type_msec and PITCH uses k_unit_param_type_semi, so
+  // the device renders both natively and never calls this callback.
+  return nullptr;
 }
 
 void CloudsEffect::touchEvent(uint8_t id, uint8_t phase, uint32_t x, uint32_t y) {

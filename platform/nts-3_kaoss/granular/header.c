@@ -66,8 +66,8 @@ const __unit_header genericfx_unit_header_t unit_header = {
       // FX depth knob: dry/wet balance.
       {0, 1023, 0, 1023, k_unit_param_type_drywet, 0, 0, 0, {"DEPTH"}},
 
-      // Encoder 1: grain size in ms.
-      {0, 1023, 0, 470,  k_unit_param_type_strings, 0, 0, 0, {"SIZE"}},
+      // Encoder 1: grain size, raw value is milliseconds (0 .. 4000 ms).
+      {0, 4000, 0, 1000, k_unit_param_type_msec, 0, 0, 0, {"SIZE"}},
 
       // Encoder 2: pitch transpose in semitones (-12 .. +12, 0 = unison).
       {-12, 12, 0, 0, k_unit_param_type_semi, 0, 0, 0, {"PITCH"}},
@@ -87,7 +87,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
     {k_genericfx_param_assign_x,     k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 0},    // POSITION
     {k_genericfx_param_assign_y,     k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},  // DENSITY
     {k_genericfx_param_assign_depth, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 1023}, // DEPTH
-    {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 470},  // SIZE
+    {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 4000, 1000}, // SIZE
     {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, -12, 12, 0},     // PITCH
     {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},  // TEXTURE
     {k_genericfx_param_assign_none,  k_genericfx_curve_toggle, k_genericfx_curve_unipolar, 0, 1, 0},       // FREEZE
