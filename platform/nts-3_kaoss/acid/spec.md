@@ -8,8 +8,8 @@ Generative TB-303-style acid synthesizer implemented as an NTS-3 kaoss pad gener
 | **2** | ROOT | `0`–`1023` | `k_unit_param_type_midi_note` | `362` (≈A2) | Base pitch. The 10-bit value scales to MIDI 0–127 in DSP (`value * 127 / 1023`, same as the arpeggiator), displayed as a musical pitch. |
 | **3** | PATTERN | `0`–`1023` | `k_unit_param_type_none` | `512` | Seed that deterministically generates the pitch / accent / slide sequence via an LCG. |
 | **4** | DENSITY | `1`–`16` | `k_unit_param_type_enum` | `12` | Euclidean pulse count `K` — how many of the 16 steps are active. |
-| **5** | CUTOFF | `0`–`1023` | `k_unit_param_type_none` | `256` | Base cutoff frequency (25 Hz – 13 kHz). Mapped to the KAOSS X-axis. |
-| **6** | RESON | `0`–`1023` | `k_unit_param_type_none` | `384` | Filter resonance (feedback up to ~1.6, gently self-oscillating). Mapped to the KAOSS Y-axis. |
+| **5** | CUTOFF | `0`–`1023` | `k_unit_param_type_none` | `256` | Base cutoff frequency (exponential scale ~30 Hz – 15 kHz). Mapped to the KAOSS X-axis. |
+| **6** | RESON | `0`–`1023` | `k_unit_param_type_none` | `384` | Filter resonance (feedback up to ~3.5, self-oscillating near the top). Mapped to the KAOSS Y-axis. |
 | **7** | DECAY | `0`–`2000` | `k_unit_param_type_msec` | `500` | Envelope fall time, displayed in milliseconds (0–2000 ms). |
 | **8** | ACID | `0`–`1023` | `k_unit_param_type_none` | `384` | Macro scaling **glide time** (0–150 ms) and **accent intensity** (volume / brightness / decay punch). |
 

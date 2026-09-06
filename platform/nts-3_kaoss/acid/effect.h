@@ -226,11 +226,14 @@ public:
     // Cache current parameter values
     const Params p = params_;
 
-    // Base filter cutoff frequency, 25 Hz .. 13 kHz
-    const float kfb = 25.f + 13000.f * clip01f(p.cutoff);
+    // Base filter cutoff frequency: exponential scale ~30 Hz .. ~15 kHz so the
+    // knob feels musical (linear mapping spent most of its travel above the
+    // bassline harmonics and was barely audible).
+    const float kfb = 30.f * fasterexpf(6.215f * clip01f(p.cutoff));
 
-    // Resonance feedback (max ~1.6, gently self-oscillates near the top)
-    const float fb = 1.6f * clip01f(p.resonance);
+    // Resonance feedback: max ~3.5 drives the ladder into strong self-
+    // oscillation near the top (max 1.6 was far below the ringing threshold).
+    const float fb = 3.5f * clip01f(p.resonance);
 
     // ACID macro: maps 0..1 to glide time 0..150 ms.
     const float acid = clip01f(p.acid);
@@ -246,8 +249,9 @@ public:
     // Glide (portamento) time, 0 .. 150 ms scaled by ACID.
     const float kg = 1.f - fasterexpf(-k_sr_recip / glide_ms);
 
-    // VCF envelope modulation: moderate base sweep, boosted by ACID on accents.
-    const float env_amount = 6000.f * (0.35f + 0.65f * acid);
+    // VCF envelope modulation: sweeps the filter up from the (low) base so the
+    // knob stays in charge of the character; boosted by ACID on accents.
+    const float env_amount = 4000.f * (0.35f + 0.65f * acid);
 
     for (const float *out_end = out + frames * 2; out != out_end; in += 2, out += 2)
     {
