@@ -23,8 +23,8 @@ const __unit_header genericfx_unit_header_t unit_header = {
     .params = {
       // Format: min, max, center (unused), default, type, frac. bits, frac. mode, <reserved>, name
 
-      // WAVE: 0 = Saw, 1 = Square
-      {0, 1, 0, 0, k_unit_param_type_strings, 0, 0, 0, {"WAVE"}},
+      // WAVE: 0 = Saw, 1023 = Square
+      {0, 1023, 0, 0, k_unit_param_type_none, 0, 0, 0, {"WAVE"}},
 
       // ROOT: bass transposition, displayed as musical pitch (C0..G9)
       {0, 1023, 0, 345, k_unit_param_type_midi_note, 0, 0, 0, {"ROOT"}},
@@ -55,9 +55,9 @@ const __unit_header genericfx_unit_header_t unit_header = {
     // Format: assign, curve, curve polarity, min, max, default value
 
     // WAVE, ROOT, PATTERN, DENSITY, DECAY, ACID not mapped to pad (edited via menu)
-    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1, 0},
+    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 0},
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1024, 345},
-    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},
+    {k_genericfx_param_assign_depth, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 1, 16, 12},
 
     // CUTOFF mapped to X axis of the control pad
@@ -66,7 +66,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
     // RESONANCE mapped to Y axis of the control pad
     {k_genericfx_param_assign_y, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 384},
 
-    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 2000, 500},
+    {k_genericfx_param_assign_none, k_genericfx_curve_exp, k_genericfx_curve_unipolar, 0, 2000, 500},
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 384}
   }
 };

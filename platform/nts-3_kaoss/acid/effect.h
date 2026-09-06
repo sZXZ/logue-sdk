@@ -85,7 +85,7 @@ public:
 
   struct Params
   {
-    float wave;     // 0 = Saw, 1 = Square
+    float wave;     // 0 = full Saw, 1 = full Square (continuous morph)
     float root;     // MIDI note 0..127 (from the 0..1023 ROOT knob)
     int32_t pattern; // seed 0..1023
     int32_t density; // Euclidean pulse count 1..16
@@ -160,19 +160,8 @@ public:
 
   inline const char *getParameterStrValue(uint8_t index, int32_t value) const override final
   {
-    static const char *wave_names[2] = {"SAW", "SQR"};
-
-    switch (index)
-    {
-    case PARAM_WAVE:
-      if (value >= 0 && value < 2)
-        return wave_names[value];
-      break;
-
-    default:
-      break;
-    }
-
+    (void)index;
+    (void)value;
     return nullptr;
   }
 
@@ -347,11 +336,9 @@ public:
       // Band-limited wavetable index for anti-aliasing
       const float idx = clipmaxf(note_f, 127.f) * (6.f / 127.f);
 
-      float osc;
-      if (p.wave < 0.5f)
-        osc = osc_bl2_sawf(phase_, idx);
-      else
-        osc = osc_bl2_sqrf(phase_, idx);
+      // WAVE slider: continuous crossfade between Saw and Square.
+      float osc = osc_bl2_sawf(phase_, idx);
+      osc += p.wave * (osc_bl2_sqrf(phase_, idx) - osc);
 
       // --- VCF: envelope+accent pushes the cutoff upward ----------------------
       const float fc = clipminf(kfb, kfb + env_amount * acc_boost * amp_);

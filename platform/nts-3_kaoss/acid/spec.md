@@ -4,7 +4,7 @@ Generative TB-303-style acid synthesizer implemented as an NTS-3 kaoss pad gener
 
 | # | Parameter | Range | Type | Default | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1** | WAVE | `0`–`1` | `k_unit_param_type_strings` | `0` (SAW) | Oscillator shape. Saw for classic bite, Square for a hollow bounce. |
+| **1** | WAVE | `0`–`1023` | `k_unit_param_type_none` | `0` (full SAW) | Continuous Saw ↔ Square crossfade. `0` = pure Saw, `1023` = pure Square. |
 | **2** | ROOT | `0`–`1023` | `k_unit_param_type_midi_note` | `362` (≈A2) | Base pitch. The 10-bit value scales to MIDI 0–127 in DSP (`value * 127 / 1023`, same as the arpeggiator), displayed as a musical pitch. |
 | **3** | PATTERN | `0`–`1023` | `k_unit_param_type_none` | `512` | Seed that deterministically generates the pitch / accent / slide sequence via an LCG. |
 | **4** | DENSITY | `1`–`16` | `k_unit_param_type_enum` | `12` | Euclidean pulse count `K` — how many of the 16 steps are active. |
