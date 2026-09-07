@@ -11,7 +11,9 @@
  *    - Kick: tuned sine sweep (~60 -> 30 Hz), beater transient, analog saturation
  *    - Snare: tuned sine body (150..280 Hz) + high-passed noise burst (~800 Hz)
  *    - Hi-Hat: band-pass filtered metallic noise (8..10 kHz), closed / open modes
- *    - "DECAY" scales all envelope decay floors proportionally (0..2000 ms)
+ *    - "DECAY" sets an audible note length for every voice (0..2000 ms);
+ *      envelopes fall linearly to silence over that length so short decay =
+ *      tight pluck, long decay = ringing tail.
  *    - "TONE" shared brightness & snare body tuning
  *    - "DRIVE" soft-clip bus saturation with input gain scaling
  *
@@ -175,7 +177,7 @@ public:
     kick_pitch_env_ = 0.f;
     kick_phase_ = 0.f;
     kick_attack_ = 1.f;
-    kick_amp_decay_coeff_ = 0.999f;
+    kick_amp_dec_ = 0.f;
     kick_pitch_decay_coeff_ = 0.999f;
 
     snare_body_amp_ = 0.f;
@@ -184,15 +186,15 @@ public:
     snare_phase_ = 0.f;
     snare_attack_ = 1.f;
     snare_noise_hp_state_ = 0.f;
-    snare_body_decay_coeff_ = 0.999f;
-    snare_noise_decay_coeff_ = 0.999f;
+    snare_body_dec_ = 0.f;
+    snare_noise_dec_ = 0.f;
     snare_pitch_decay_coeff_ = 0.999f;
 
     hat_amp_ = 0.f;
     hat_attack_ = 1.f;
     hat_bpf_s1_ = 0.f;
     hat_bpf_s2_ = 0.f;
-    hat_decay_coeff_ = 0.999f;
+    hat_dec_ = 0.f;
 
     tone_lp_state_ = 0.f;
 
@@ -348,7 +350,9 @@ public:
             kick_attack_ = 1.f;
         }
         kick_pitch_env_ *= kick_pitch_decay_coeff_;
-        kick_amp_ *= kick_amp_decay_coeff_;
+        kick_amp_ -= kick_amp_dec_;
+        if (kick_amp_ < 0.f)
+          kick_amp_ = 0.f;
 
         const float kick_hz = kick_base_hz + kick_sweep_depth * kick_pitch_env_;
         kick_phase_ += kick_hz * k_sr_recip;
@@ -370,8 +374,12 @@ public:
           if (snare_attack_ > 1.f)
             snare_attack_ = 1.f;
         }
-        snare_body_amp_ *= snare_body_decay_coeff_;
-        snare_noise_amp_ *= snare_noise_decay_coeff_;
+        snare_body_amp_ -= snare_body_dec_;
+        if (snare_body_amp_ < 0.f)
+          snare_body_amp_ = 0.f;
+        snare_noise_amp_ -= snare_noise_dec_;
+        if (snare_noise_amp_ < 0.f)
+          snare_noise_amp_ = 0.f;
         snare_pitch_env_ *= snare_pitch_decay_coeff_;
 
         const float snare_hz = snare_base_hz + 50.f * snare_pitch_env_;
@@ -397,7 +405,9 @@ public:
           if (hat_attack_ > 1.f)
             hat_attack_ = 1.f;
         }
-        hat_amp_ *= hat_decay_coeff_;
+        hat_amp_ -= hat_dec_;
+        if (hat_amp_ < 0.f)
+          hat_amp_ = 0.f;
 
         const float white = (float)(int32_t)osc_rand() * 4.6566129e-10f;
         const float hp = white - hat_bpf_s1_ * hat_q - hat_bpf_s2_;
@@ -480,8 +490,11 @@ private:
     kick_phase_ = 0.0f;
     kick_attack_ = 0.0f;
 
-    const float kick_dec_time = (0.030f + 0.140f * kick_norm) * decay_mult;
-    kick_amp_decay_coeff_ = fasterexpf(-k_sr_recip / kick_dec_time);
+    // Amplitude falls linearly to silence over the note length, so DECAY maps
+    // directly to an audible, defined note duration (not a quiet exponential
+    // dust tail).
+    const float kick_note_len = (0.060f + 0.340f * kick_norm) * decay_mult;
+    kick_amp_dec_ = (1.0f - 0.0001f) / (kick_note_len * k_sr);
 
     const float pitch_dec_time = (0.015f + 0.035f * kick_norm) * decay_mult;
     kick_pitch_decay_coeff_ = fasterexpf(-k_sr_recip / pitch_dec_time);
@@ -495,11 +508,11 @@ private:
     snare_phase_ = 0.0f;
     snare_attack_ = 0.0f;
 
-    const float body_dec_time = (0.015f + 0.040f * snare_norm) * decay_mult;
-    snare_body_decay_coeff_ = fasterexpf(-k_sr_recip / body_dec_time);
+    const float body_note_len = (0.020f + 0.045f * snare_norm) * decay_mult;
+    snare_body_dec_ = (1.0f - 0.0001f) / (body_note_len * k_sr);
 
-    const float noise_dec_time = (0.010f + 0.050f * snare_norm) * decay_mult;
-    snare_noise_decay_coeff_ = fasterexpf(-k_sr_recip / noise_dec_time);
+    const float noise_note_len = (0.015f + 0.050f * snare_norm) * decay_mult;
+    snare_noise_dec_ = (1.0f - 0.0001f) / (noise_note_len * k_sr);
 
     snare_pitch_decay_coeff_ = fasterexpf(-k_sr_recip / 0.008f);
   }
@@ -509,9 +522,9 @@ private:
     hat_amp_ = 1.0f;
     hat_attack_ = 0.0f;
 
-    const float hat_floor = is_open ? 0.150f : 0.020f;
-    const float hat_dec_time = hat_floor * decay_mult;
-    hat_decay_coeff_ = fasterexpf(-k_sr_recip / hat_dec_time);
+    const float hat_floor = is_open ? 0.180f : 0.040f;
+    const float hat_note_len = hat_floor * decay_mult;
+    hat_dec_ = (1.0f - 0.0001f) / (hat_note_len * k_sr);
   }
 
   void regenPattern()
@@ -621,7 +634,7 @@ private:
   float kick_amp_;
   float kick_pitch_env_;
   float kick_attack_;
-  float kick_amp_decay_coeff_;
+  float kick_amp_dec_; // per-sample amplitude decrement (linear decay)
   float kick_pitch_decay_coeff_;
 
   // Snare voice state
@@ -631,8 +644,8 @@ private:
   float snare_pitch_env_;
   float snare_attack_;
   float snare_noise_hp_state_;
-  float snare_body_decay_coeff_;
-  float snare_noise_decay_coeff_;
+  float snare_body_dec_;   // per-sample amplitude decrement
+  float snare_noise_dec_;  // per-sample amplitude decrement
   float snare_pitch_decay_coeff_;
 
   // Hi-hat voice state
@@ -640,7 +653,7 @@ private:
   float hat_attack_;
   float hat_bpf_s1_;
   float hat_bpf_s2_;
-  float hat_decay_coeff_;
+  float hat_dec_; // per-sample amplitude decrement (linear decay)
 
   // Master bus filter state
   float tone_lp_state_;

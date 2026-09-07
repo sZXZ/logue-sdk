@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 // Stub firmware headers first (via -I tests/drums/stubs).
 #include "processor.h"
@@ -163,6 +164,85 @@ int main(int argc, char **argv)
                 st[r].flats, st[r].flat_run, st[r].low_peak);
   }
 
+  // --- DECAY sweep: kick-only, density=1 (one hit per bar). The note length
+  // (time the kick stays above -40 dB of its own peak) must clearly grow with
+  // DECAY. This is the regression for "decay doesn't do anything".
+  // density=1 activates only step 0, and the sequencer first fires step 0 after
+  // a full bar (~2s), so we render 4s and measure the first hit's tail within
+  // the clean gap before the bar's second hit (~4s).
+  const int k_decay_total = k_test_sr * 4;
+  std::vector<float> decay_out(k_decay_total * 2);
+  float tails[3];
+  const int dvals[] = {0, 400, 2000};
+  for (int k = 0; k < 3; ++k)
+  {
+    Effect fx;
+    fx.init(nullptr);
+    fx.setParameter(0, 512);
+    fx.setParameter(1, 1); // one hit per bar -> clean isolated hit
+    fx.setParameter(2, 1023);
+    fx.setParameter(3, 0);
+    fx.setParameter(4, 0);
+    fx.setParameter(5, dvals[k]);
+    fx.setParameter(6, 512);
+    fx.setParameter(7, 256);
+    fx.setTempo(120.f);
+    std::memset(decay_out.data(), 0, sizeof(float) * k_decay_total * 2);
+    fx.touchEvent(0, 1 /* began */, 0, 0);
+    const int chunk = 480;
+    for (int f = 0; f < k_decay_total; f += chunk)
+    {
+      const int c = std::min(chunk, k_decay_total - f);
+      static float in[k_decay_total * 2];
+      fx.process(in + f * 2, decay_out.data() + f * 2, c);
+    }
+
+    float peak = 0.f;
+    for (int i = 0; i < k_decay_total * 2; i += 2)
+    {
+      const float a = std::fabs(decay_out[i]);
+      if (a > peak)
+        peak = a;
+    }
+
+    // Separate hits with the strong threshold (attack zones), then measure how
+    // long the first hit's output stays above -40 dB of its own peak. The hit
+    // region ends where amplitude stays below 0.5*peak for >= 50 ms (a clean
+    // gap before the next hit), so pre-hit attack ramps can't corrupt it.
+    int onset1 = -1;
+    for (int i = 0; i < k_decay_total * 2; i += 2)
+    {
+      if (std::fabs(decay_out[i]) > 0.5f * peak)
+      {
+        onset1 = i / 2;
+        break;
+      }
+    }
+
+    int region_end = -1, below = 0;
+    for (int i = onset1 * 2; i < k_decay_total * 2; i += 2)
+    {
+      if (std::fabs(decay_out[i]) > 0.5f * peak)
+        below = 0;
+      else
+        below += 2;
+      if (below >= (k_test_sr / 20) * 2)
+      {
+        region_end = (i - below) / 2;
+        break;
+      }
+    }
+
+    int last = -1;
+    for (int i = onset1 * 2; i < region_end * 2; i += 2)
+    {
+      if (std::fabs(decay_out[i]) > 0.01f * peak)
+        last = i / 2;
+    }
+    tails[k] = (region_end > 0 && last > onset1) ? (float)(last - onset1) / k_test_sr : -1.f;
+    std::printf("decay=%4dms kick tail=%5.2fs\n", dvals[k], tails[k]);
+  }
+
   // --- Regression assertions ------------------------------------------------
   int failures = 0;
 #define CHECK(cond, msg) \
@@ -186,6 +266,11 @@ int main(int argc, char **argv)
   // Voice isolation sanity: snare/hat must not dominate a knockout kick.
   CHECK(st[1].max_out < st[0].max_out, "snare sits below kick level");
   CHECK(st[2].max_out < st[0].max_out, "hat sits below kick level");
+
+  // DECAY must audibly change the drum note length.
+  CHECK(tails[0] > 0.f, "decay=0 kick tail is finite");
+  CHECK(tails[1] > tails[0] * 1.5f, "DECAY clearly lengthens the note (short->mid)");
+  CHECK(tails[2] > tails[1] * 1.5f, "DECAY clearly lengthens the note (mid->long)");
 
 #undef CHECK
 
