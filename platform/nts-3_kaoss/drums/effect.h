@@ -174,6 +174,7 @@ public:
     kick_amp_ = 0.f;
     kick_pitch_env_ = 0.f;
     kick_phase_ = 0.f;
+    kick_attack_ = 1.f;
     kick_amp_decay_coeff_ = 0.999f;
     kick_pitch_decay_coeff_ = 0.999f;
 
@@ -181,12 +182,14 @@ public:
     snare_noise_amp_ = 0.f;
     snare_pitch_env_ = 0.f;
     snare_phase_ = 0.f;
+    snare_attack_ = 1.f;
     snare_noise_hp_state_ = 0.f;
     snare_body_decay_coeff_ = 0.999f;
     snare_noise_decay_coeff_ = 0.999f;
     snare_pitch_decay_coeff_ = 0.999f;
 
     hat_amp_ = 0.f;
+    hat_attack_ = 1.f;
     hat_bpf_s1_ = 0.f;
     hat_bpf_s2_ = 0.f;
     hat_decay_coeff_ = 0.999f;
@@ -211,14 +214,17 @@ public:
     kick_amp_ = 0.f;
     kick_pitch_env_ = 0.f;
     kick_phase_ = 0.f;
+    kick_attack_ = 1.f;
 
     snare_body_amp_ = 0.f;
     snare_noise_amp_ = 0.f;
     snare_pitch_env_ = 0.f;
     snare_phase_ = 0.f;
+    snare_attack_ = 1.f;
     snare_noise_hp_state_ = 0.f;
 
     hat_amp_ = 0.f;
+    hat_attack_ = 1.f;
     hat_bpf_s1_ = 0.f;
     hat_bpf_s2_ = 0.f;
 
@@ -256,19 +262,21 @@ public:
     const float snare_base_hz = 150.f + 130.f * tone_norm;
     const float snare_noise_mix = 0.35f + 0.45f * snare_norm;
     const float snare_body_mix = 1.0f - 0.4f * snare_norm;
-    const float snare_level = snare_norm * 0.95f;
+    const float snare_level = snare_norm * 0.34f;
 
     // Kick parameters
-    const float kick_base_hz = 38.f;
-    const float kick_sweep_depth = 25.f + 65.f * kick_norm;
-    const float kick_gain = 0.3f + 0.7f * kick_norm;
+    const float kick_base_hz = 40.f;
+    const float kick_sweep_depth = 95.f + 45.f * kick_norm;
+    const float kick_gain = 0.22f + 0.50f * kick_norm;
 
     // Master Tone Shelf filter coeff & tilt
     const float tone_k = 1.f - fasterexpf(-M_TWOPI * 3000.f * k_sr_recip);
     const float tone_tilt = (tone_norm - 0.5f) * 0.6f;
 
     // Master Drive
-    const float drive_gain = 1.f + 3.f * drive_norm;
+    // DRIVE saturation is deliberately soft at the default so the mix stays
+    // open (no flat-top clipping); cranking it pushes into heavy saturation.
+    const float drive_gain = 0.75f + 1.75f * drive_norm;
     const float drive_comp = 1.f / (1.f + 0.6f * drive_norm);
 
     // Hat filter parameters (SVF BPF around 7.5k - 10.5k Hz)
@@ -282,6 +290,9 @@ public:
     // Ramp rates for pad touch fade-in / fade-out (zero clicks)
     const float ramp_up = k_sr_recip / 0.002f;   // 2 ms ramp
     const float ramp_down = k_sr_recip / 0.025f; // 25 ms fade out
+
+    // Fast attack increments (1 ms) to round off drum onsets (no click transients)
+    const float attack_inc = k_sr_recip / 0.001f;
 
     for (const float *out_end = out + frames * 2; out != out_end; in += 2, out += 2)
     {
@@ -330,6 +341,12 @@ public:
       float kick_out = 0.f;
       if (kick_amp_ > 0.0001f)
       {
+        if (kick_attack_ < 1.f)
+        {
+          kick_attack_ += attack_inc;
+          if (kick_attack_ > 1.f)
+            kick_attack_ = 1.f;
+        }
         kick_pitch_env_ *= kick_pitch_decay_coeff_;
         kick_amp_ *= kick_amp_decay_coeff_;
 
@@ -340,13 +357,19 @@ public:
         const float kick_sine = osc_sinf(kick_phase_);
         const float kick_click = (kick_pitch_env_ > 0.85f) ? (kick_pitch_env_ * 0.35f * kick_norm) : 0.f;
         const float kick_raw = (kick_sine + kick_click) * kick_amp_;
-        kick_out = tanh(kick_raw * 1.5f) * kick_gain;
+        kick_out = tanh(kick_raw * 1.5f) * kick_gain * kick_attack_;
       }
 
       // --- 2. Snare Voice ----------------------------------------------------
       float snare_out = 0.f;
       if (snare_body_amp_ > 0.0001f || snare_noise_amp_ > 0.0001f)
       {
+        if (snare_attack_ < 1.f)
+        {
+          snare_attack_ += attack_inc;
+          if (snare_attack_ > 1.f)
+            snare_attack_ = 1.f;
+        }
         snare_body_amp_ *= snare_body_decay_coeff_;
         snare_noise_amp_ *= snare_noise_decay_coeff_;
         snare_pitch_env_ *= snare_pitch_decay_coeff_;
@@ -361,13 +384,19 @@ public:
         snare_noise_hp_state_ += snare_hp_k * hp_in;
         const float snare_noise = hp_in * snare_noise_amp_;
 
-        snare_out = (snare_body * snare_body_mix + snare_noise * snare_noise_mix) * snare_level;
+        snare_out = (snare_body * snare_body_mix + snare_noise * snare_noise_mix) * snare_level * snare_attack_;
       }
 
       // --- 3. Hi-Hat Voice ---------------------------------------------------
       float hat_out = 0.f;
       if (hat_amp_ > 0.0001f)
       {
+        if (hat_attack_ < 1.f)
+        {
+          hat_attack_ += attack_inc;
+          if (hat_attack_ > 1.f)
+            hat_attack_ = 1.f;
+        }
         hat_amp_ *= hat_decay_coeff_;
 
         const float white = (float)(int32_t)osc_rand() * 4.6566129e-10f;
@@ -377,8 +406,8 @@ public:
         const float lp = hat_f * bp + hat_bpf_s2_;
         hat_bpf_s2_ = lp;
 
-        const float hat_filtered = bp * 0.7f + hp * 0.4f;
-        hat_out = hat_filtered * hat_amp_ * hat_level * 0.75f;
+        const float hat_filtered = bp * 0.85f + hp * 0.15f;
+        hat_out = hat_filtered * hat_amp_ * hat_level * 0.14f * hat_attack_;
       }
 
       // --- Drum Sum & Master Tone Tilt ---------------------------------------
@@ -449,6 +478,7 @@ private:
     kick_amp_ = 1.0f;
     kick_pitch_env_ = 1.0f;
     kick_phase_ = 0.0f;
+    kick_attack_ = 0.0f;
 
     const float kick_dec_time = (0.030f + 0.140f * kick_norm) * decay_mult;
     kick_amp_decay_coeff_ = fasterexpf(-k_sr_recip / kick_dec_time);
@@ -463,6 +493,7 @@ private:
     snare_noise_amp_ = 1.0f;
     snare_pitch_env_ = 1.0f;
     snare_phase_ = 0.0f;
+    snare_attack_ = 0.0f;
 
     const float body_dec_time = (0.015f + 0.040f * snare_norm) * decay_mult;
     snare_body_decay_coeff_ = fasterexpf(-k_sr_recip / body_dec_time);
@@ -476,6 +507,7 @@ private:
   void triggerHihat(float decay_mult, bool is_open)
   {
     hat_amp_ = 1.0f;
+    hat_attack_ = 0.0f;
 
     const float hat_floor = is_open ? 0.150f : 0.020f;
     const float hat_dec_time = hat_floor * decay_mult;
@@ -588,6 +620,7 @@ private:
   float kick_phase_;
   float kick_amp_;
   float kick_pitch_env_;
+  float kick_attack_;
   float kick_amp_decay_coeff_;
   float kick_pitch_decay_coeff_;
 
@@ -596,6 +629,7 @@ private:
   float snare_body_amp_;
   float snare_noise_amp_;
   float snare_pitch_env_;
+  float snare_attack_;
   float snare_noise_hp_state_;
   float snare_body_decay_coeff_;
   float snare_noise_decay_coeff_;
@@ -603,6 +637,7 @@ private:
 
   // Hi-hat voice state
   float hat_amp_;
+  float hat_attack_;
   float hat_bpf_s1_;
   float hat_bpf_s2_;
   float hat_decay_coeff_;
