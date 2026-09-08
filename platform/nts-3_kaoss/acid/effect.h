@@ -183,6 +183,8 @@ public:
     step_ = 0;
     clock_accum_ = 0.f;
     samples_per_step_ = k_sr_recip_16th(120.f);
+    host_counter_ = 0;
+    host_sync_valid_ = false;
 
     s1_ = s2_ = s3_ = s4_ = 0.f;
 
@@ -204,6 +206,8 @@ public:
     step_accent_ = 0.f;
     step_ = 0;
     clock_accum_ = 0.f;
+    host_counter_ = 0;
+    host_sync_valid_ = false;
     s1_ = s2_ = s3_ = s4_ = 0.f;
   }
 
@@ -213,6 +217,13 @@ public:
     if (bpm < 1.f)
       bpm = 1.f;
     samples_per_step_ = k_sr_recip_16th(bpm);
+  }
+
+  // Host 4PPQN sync callback: one tick per 16th note on the global clock.
+  inline void tempo4ppqnTick(uint32_t counter) override final
+  {
+    host_counter_ = counter;
+    host_sync_valid_ = true;
   }
 
   // audio processing callbacks
@@ -261,6 +272,41 @@ public:
     {
       // --- Sequencer clock (16th notes) --------------------------------------
       clock_accum_ += 1.f;
+
+      // Phase-lock to the host's global 4PPQN grid: once ticks arrive, any
+      // boundary that differs from our free-running step snaps us back onto
+      // the transport clock so we never drift from the global sync time.
+      if (host_sync_valid_)
+      {
+        const uint8_t host_step = (uint8_t)(host_counter_ % k_num_steps);
+        if (host_step != step_)
+        {
+          step_ = host_step;
+          clock_accum_ = 0.f;
+
+          if (gate_ && hit_[step_])
+          {
+            const float n = p.root + (float)pitch_[step_];
+            if (slide_[step_] && env_state_ != ENV_IDLE)
+            {
+              // Legato slide: glide the pitch, no re-attack
+              note_target_ = n;
+            }
+            else
+            {
+              // Retrigger. Legato if the note is still sounding: keep the
+              // current amp and resume the attack from there (no click).
+              note_target_ = n;
+              note_now_ = n;
+              if (env_state_ == ENV_IDLE)
+                amp_ = 0.f;
+              env_state_ = ENV_ATTACK;
+            }
+            step_accent_ = accent_[step_] ? 1.f : 0.f;
+          }
+        }
+      }
+
       if (clock_accum_ >= samples_per_step_)
       {
         clock_accum_ -= samples_per_step_;
@@ -476,6 +522,12 @@ private:
   uint8_t step_;
   float clock_accum_;
   float samples_per_step_;
+
+  // Host 4PPQN sync: the host fires one tick per 16th note on its global
+  // transport clock. When ticks have been received we re-anchor step_ onto
+  // that grid so the sequencer never drifts from the global sync time.
+  uint32_t host_counter_;
+  bool host_sync_valid_;
 
   // voice state
   float phase_;

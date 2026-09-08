@@ -170,6 +170,8 @@ public:
     step_ = 0;
     clock_accum_ = 0.f;
     samples_per_step_ = k_sr_recip_16th(120.f);
+    host_counter_ = 0;
+    host_sync_valid_ = false;
     gate_ = false;
     touch_gain_ = 0.f;
 
@@ -210,6 +212,8 @@ public:
   {
     step_ = 0;
     clock_accum_ = 0.f;
+    host_counter_ = 0;
+    host_sync_valid_ = false;
     gate_ = false;
     touch_gain_ = 0.f;
 
@@ -238,6 +242,13 @@ public:
     if (bpm < 1.f)
       bpm = 1.f;
     samples_per_step_ = k_sr_recip_16th(bpm);
+  }
+
+  // Host 4PPQN sync callback: one tick per 16th note on the global clock.
+  inline void tempo4ppqnTick(uint32_t counter) override final
+  {
+    host_counter_ = counter;
+    host_sync_valid_ = true;
   }
 
   void process(const float *__restrict in, float *__restrict out, uint32_t frames) override final
@@ -300,6 +311,30 @@ public:
     {
       // --- Sequencer clock (16th notes) --------------------------------------
       clock_accum_ += 1.f;
+
+      // Phase-lock to the host's global 4PPQN grid: once ticks arrive, any
+      // boundary that differs from our free-running step snaps us back onto
+      // the transport clock so we never drift from the global sync time.
+      if (host_sync_valid_)
+      {
+        const uint8_t host_step = (uint8_t)(host_counter_ % k_num_steps);
+        if (host_step != step_)
+        {
+          step_ = host_step;
+          clock_accum_ = 0.f;
+
+          if (gate_ && euclid_mask_[step_])
+          {
+            if (kick_hit_[step_])
+              triggerKick(decay_mult, kick_norm);
+            if (snare_hit_[step_])
+              triggerSnare(decay_mult, snare_norm);
+            if (hihat_hit_[step_])
+              triggerHihat(decay_mult, hat_is_open);
+          }
+        }
+      }
+
       if (clock_accum_ >= samples_per_step_)
       {
         clock_accum_ -= samples_per_step_;
@@ -628,6 +663,12 @@ private:
   float samples_per_step_;
   bool gate_;
   float touch_gain_;
+
+  // Host 4PPQN sync: the host fires one tick per 16th note on its global
+  // transport clock. When ticks have been received we re-anchor step_ onto
+  // that grid so the sequencer never drifts from the global sync time.
+  uint32_t host_counter_;
+  bool host_sync_valid_;
 
   // Kick voice state
   float kick_phase_;

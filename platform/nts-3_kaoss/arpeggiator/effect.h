@@ -112,6 +112,28 @@ public:
 
   ~Arpeggiator(void) {}
 
+  inline void reset_state() {
+    is_active_ = true;
+    is_touched_ = false;
+    phase_ = 0.f;
+    amp_ = 0.f;
+    target_amp_ = 0.f;
+    env_state_ = ENV_IDLE;
+    env_phase_ = 0.f;
+    current_note_hz_ = 0.f;
+    smooth_hz_ = 0.f;
+
+    seq_index_ = 0;
+    seq_dir_ = 1;
+
+    samples_per_tick_accum_ = 0.f;
+    host_counter_ = 0;
+    last_host_counter_ = 0;
+    steps_elapsed_ = 0;
+    host_sync_valid_ = false;
+    setTempo(last_tempo_);
+  }
+
   inline int8_t Init(const unit_runtime_desc_t *desc) {
     if (!desc)
       return k_unit_err_undef;
@@ -139,24 +161,6 @@ public:
     is_active_ = false; 
     is_touched_ = false; 
     target_amp_ = 0.f; 
-  }
-
-  inline void reset_state() {
-    is_active_ = true;
-    is_touched_ = false;
-    phase_ = 0.f;
-    amp_ = 0.f;
-    target_amp_ = 0.f;
-    env_state_ = ENV_IDLE;
-    env_phase_ = 0.f;
-    current_note_hz_ = 0.f;
-    smooth_hz_ = 0.f;
-
-    seq_index_ = 0;
-    seq_dir_ = 1;
-
-    samples_per_tick_accum_ = 0.f;
-    setTempo(last_tempo_);
   }
 
   // BPM is in UQ16.16 format (integer part in upper 16 bits, fractional in lower 16)
@@ -191,9 +195,10 @@ public:
   }
 
   inline void tempoTick(uint32_t counter) {
-    // Not strictly needed if we use sample-accurate timing,
-    // but can be used for sync reset if desired.
-    (void)counter;
+    // Host 4PPQN sync callback: one tick per 16th note on the global clock.
+    // The arp re-anchors its step phase onto this grid in Process().
+    host_counter_ = counter;
+    host_sync_valid_ = true;
   }
 
   fast_inline void Process(const float *in, float *out, size_t frames) {
@@ -214,15 +219,27 @@ public:
       if (is_touched_) {
         // --- Arpeggiator step clock ---
         samples_per_tick_accum_ += 1.0f;
+
+        // Free-running step driver keeps exact musical timing for every
+        // division (including sub-16th and triplet patterns).
         if (samples_per_tick_accum_ >= samples_per_step_) {
           samples_per_tick_accum_ -= samples_per_step_;
-          advanceSequence();
-          uint8_t prob_group = params_.pattern >> 3;
-          static const uint8_t probs[] = {100, 75, 50, 25};
-          uint8_t prob = (prob_group < 4) ? probs[prob_group] : 100;
-          if (prob >= 100 || (uint8_t)(osc_rand() % 100) < prob) {
-            triggerNote();
+          stepSequence();
+        }
+
+        // Phase-lock to the host's global 4PPQN grid. On each new host tick,
+        // catch the sequence up to the current grid subdivision and re-anchor
+        // the intra-step phase so we never drift from the global sync time.
+        if (host_sync_valid_ && host_counter_ != last_host_counter_) {
+          last_host_counter_ = host_counter_;
+          const float q = sixteenthsPerStep();
+          const float host_phase = (float)host_counter_ / q;
+          const int32_t host_floor = (int32_t)host_phase;
+          while (steps_elapsed_ < host_floor) {
+            stepSequence();
           }
+          steps_elapsed_ = host_floor; // clamp if transport jumped backwards
+          samples_per_tick_accum_ = (host_phase - (float)host_floor) * samples_per_step_;
         }
 
         // Gate close: when accumulated time exceeds gate fraction, begin release.
@@ -462,6 +479,35 @@ private:
     }
   }
 
+  // 16ths per arp step for the current pattern division (host tick = 1 16th).
+  inline float sixteenthsPerStep() const {
+    static const float q[] = {
+        4.0f,           // 1/4
+        8.0f / 3.0f,    // 1/4T
+        2.0f,           // 1/8
+        4.0f / 3.0f,    // 1/8T
+        1.0f,           // 1/16
+        2.0f / 3.0f,    // 1/16T
+        0.5f,           // 1/32
+        1.0f / 3.0f     // 1/32T
+    };
+    return q[params_.pattern & 7];
+  }
+
+  // Advance the sequence by one step: move the note cursor, bump the global
+  // step counter and probabilistically trigger the note. Shared by the
+  // free-running clock and the host-grid catch-up so timing stays identical.
+  inline void stepSequence() {
+    advanceSequence();
+    ++steps_elapsed_;
+    uint8_t prob_group = params_.pattern >> 3;
+    static const uint8_t probs[] = {100, 75, 50, 25};
+    uint8_t prob = (prob_group < 4) ? probs[prob_group] : 100;
+    if (prob >= 100 || (uint8_t)(osc_rand() % 100) < prob) {
+      triggerNote();
+    }
+  }
+
   inline void advanceSequence() {
     if (active_notes_count_ == 0)
       return;
@@ -528,6 +574,14 @@ private:
 
   float samples_per_step_;
   float samples_per_tick_accum_;
+
+  // Host 4PPQN sync: the host fires one tick per 16th note on its global
+  // transport clock. We re-anchor the step phase onto that grid so the arp
+  // never drifts from the global sync time.
+  uint32_t host_counter_;
+  uint32_t last_host_counter_;
+  int32_t steps_elapsed_; // total steps advanced since (re)sync
+  bool host_sync_valid_;
 
   // ADSR envelope state
   enum EnvState : uint8_t { ENV_IDLE, ENV_ATTACK, ENV_DECAY, ENV_SUSTAIN, ENV_RELEASE };
