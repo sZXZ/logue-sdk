@@ -16,7 +16,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
             .dev_id = 0x735A585A,
             .unit_id = 0x02U,
             .version = 0x00010000U,
-            .name = "Arpeggiator",
+            .name = "ARP",
             .num_params = 8,
 
             .params =

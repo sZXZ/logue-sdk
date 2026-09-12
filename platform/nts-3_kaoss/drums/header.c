@@ -17,7 +17,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
     .dev_id = 0x735A585A,
     .unit_id = 0x03U,
     .version = 0x00010000U,
-    .name = "DRUMS",
+    .name = "Drum",
     .num_params = 8,
 
     .params = {
@@ -51,28 +51,28 @@ const __unit_header genericfx_unit_header_t unit_header = {
   .default_mappings = {
     // Format: assign, curve, curve polarity, min, max, default value
 
-    // 1. PATTERN: menu / encoder
+    // 1. PATTERN
+    {k_genericfx_param_assign_depth, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},
+
+    // 2. DENSITY
+    {k_genericfx_param_assign_x, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 1, 16, 8},
+
+    // 3. KICK
+    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 768},
+
+    // 4. SNARE
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},
 
-    // 2. DENSITY: menu / encoder
-    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 1, 16, 8},
+    // 5. HIHAT
+    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 384},
 
-    // 3. KICK: mapped to X axis of the KAOSS pad
-    {k_genericfx_param_assign_x, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 768},
+    // 6. DECAY
+    {k_genericfx_param_assign_y, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 2000, 400},
 
-    // 4. SNARE: menu / encoder
+    // 7. TONE
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},
 
-    // 5. HIHAT: mapped to Y axis of the KAOSS pad
-    {k_genericfx_param_assign_y, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 384},
-
-    // 6. DECAY: menu / encoder
-    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 2000, 400},
-
-    // 7. TONE: menu / encoder
-    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},
-
-    // 8. DRIVE: mapped to depth knob
-    {k_genericfx_param_assign_depth, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 256},
+    // 8. DRIVE
+    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 256},
   }
 };

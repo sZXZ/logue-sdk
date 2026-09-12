@@ -2,7 +2,7 @@
 # Configuration for Makefile
 #
 
-PROJECT := drums
+PROJECT := drum
 PROJECT_TYPE := genericfx
 
 ##############################################################################

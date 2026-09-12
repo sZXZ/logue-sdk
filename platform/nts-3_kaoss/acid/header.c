@@ -17,7 +17,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
     .dev_id = 0x735A585A,
     .unit_id = 0x02U,
     .version = 0x00010000U,
-    .name = "ACID303",                                        // Name for this unit, will be displayed on device
+    .name = "ACID Base",                                        // Name for this unit, will be displayed on device
     .num_params = 8,                                          // Number of valid parameter descriptors. (max. 8)
 
     .params = {
@@ -27,7 +27,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
       {0, 1023, 0, 0, k_unit_param_type_none, 0, 0, 0, {"WAVE"}},
 
       // ROOT: bass transposition, displayed as musical pitch (C0..G9)
-      {0, 1023, 0, 345, k_unit_param_type_midi_note, 0, 0, 0, {"ROOT"}},
+      {0, 1023, 0, 280, k_unit_param_type_midi_note, 0, 0, 0, {"ROOT"}},
 
       // PATTERN: seed that generates the pitch/accent/slide sequence
       {0, 1023, 0, 512, k_unit_param_type_none, 0, 0, 0, {"PATTERN"}},
@@ -56,7 +56,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
 
     // WAVE, ROOT, PATTERN, DENSITY, DECAY, ACID not mapped to pad (edited via menu)
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 0},
-    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1024, 345},
+    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 198, 442, 280},
     {k_genericfx_param_assign_depth, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 1, 16, 12},
 
