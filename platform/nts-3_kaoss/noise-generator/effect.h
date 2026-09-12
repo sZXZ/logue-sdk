@@ -207,8 +207,8 @@ public:
       current_pan = clipminmaxf(0.0f, current_pan, 1.0f);
 
       const float angle = current_pan * 1.57079632679f;
-      const float pan_l = osc_sinf(angle * 0.159154943f);
-      const float pan_r = osc_cosf(angle * 0.159154943f);
+      const float pan_l = osc_cosf(angle * 0.159154943f);
+      const float pan_r = osc_sinf(angle * 0.159154943f);
 
       // Apply panning (out_p[0] is Left, out_p[1] is Right)
       out_p[0] = in_p[0] * dry + out_val * pan_l * wet;

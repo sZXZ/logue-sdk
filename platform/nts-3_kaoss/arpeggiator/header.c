@@ -21,10 +21,10 @@ const __unit_header genericfx_unit_header_t unit_header = {
 
             .params =
                 {// 0: ROOT (X mapping)
-                 {0, 1023, 0, 0, k_unit_param_type_midi_note, 0, 0, 0, {"ROOT"}},
+                 {0, 1023, 0, 190, k_unit_param_type_midi_note, 0, 0, 0, {"ROOT"}},
 
                  // 1: CHORD (Y mapping)
-                 {0, 10, 0, 0, k_unit_param_type_strings, 0, 0, 0, {"CHORD"}},
+                 {0, 10, 0, 2, k_unit_param_type_strings, 0, 0, 0, {"CHORD"}},
 
                  // 2: GATE (DEPTH mapping)
                  {0, 1023, 512, 512, k_unit_param_type_none, 0, 0, 0, {"GATE"}},
@@ -36,25 +36,26 @@ const __unit_header genericfx_unit_header_t unit_header = {
                  {0, 19, 0, 0, k_unit_param_type_strings, 0, 0, 0, {"MODE"}},
 
                  // 5: WAVE (0=Sine, 256=Triangle, 512=Square, 768=Saw, 1023=Sine)
-                 {0, 1023, 0, 0, k_unit_param_type_none, 0, 0, 0, {"WAVE"}},
+                 {0, 1023, 0, 512, k_unit_param_type_none, 0, 0, 0, {"WAVE"}},
 
                  // 6: LEVEL
                  {0, 1023, 512, 512, k_unit_param_type_none, 0, 0, 0, {"LEVEL"}},
 
                  // 7: ADSR morph (0=Pluck, 256=Pad, 512=Perc, 768=Swell, 1023=LongRel)
-                 {0, 1023, 0, 0, k_unit_param_type_none, 0, 0, 0, {"ADSR"}}},
+                 {0, 1023, 0, 30, k_unit_param_type_none, 0, 0, 0, {"ADSR"}}},
         },
     .default_mappings = {
-        // ROOT mapped to X axis
-        {k_genericfx_param_assign_x, k_genericfx_curve_linear,
-         k_genericfx_curve_unipolar, 0, 1023, 0},
+        //k_genericfx_param_assign_none k_genericfx_param_assign_y k_genericfx_param_assign_x k_genericfx_param_assign_depth
+        // ROOT - 
+        {k_genericfx_param_assign_none, k_genericfx_curve_linear,
+         k_genericfx_curve_unipolar, 0, 1023, 190},
 
         // CHORD mapped to Y axis
-        {k_genericfx_param_assign_y, k_genericfx_curve_linear,
-         k_genericfx_curve_unipolar, 0, 10, 0},
+        {k_genericfx_param_assign_none, k_genericfx_curve_linear,
+         k_genericfx_curve_unipolar, 0, 10, 2},
 
         // GATE (unmapped, edit via menu)
-        {k_genericfx_param_assign_none, k_genericfx_curve_linear,
+        {k_genericfx_param_assign_x, k_genericfx_curve_linear,
          k_genericfx_curve_unipolar, 0, 1023, 512},
 
         // PATTERN
@@ -67,12 +68,12 @@ const __unit_header genericfx_unit_header_t unit_header = {
 
         // WAVE
         {k_genericfx_param_assign_none, k_genericfx_curve_linear,
-         k_genericfx_curve_unipolar, 0, 1023, 0},
+         k_genericfx_curve_unipolar, 0, 1023, 512},
 
         // LEVEL mapped to DEPTH control
         {k_genericfx_param_assign_depth, k_genericfx_curve_exp,
          k_genericfx_curve_unipolar, 0, 1023, 512},
 
         // ADSR morph (unmapped, edit via menu)
-        {k_genericfx_param_assign_none, k_genericfx_curve_linear,
-         k_genericfx_curve_unipolar, 0, 1023, 0}}};
+        {k_genericfx_param_assign_y, k_genericfx_curve_linear,
+         k_genericfx_curve_unipolar, 0, 1023, 30}}};
