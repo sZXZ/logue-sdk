@@ -15,11 +15,12 @@ const __unit_header genericfx_unit_header_t unit_header = {
     .target = UNIT_TARGET_PLATFORM | k_unit_module_genericfx,
     .api = UNIT_API_VERSION,
     .dev_id = 0x735A585A,
-    .unit_id = 0x03U,
     .version = 0x00010000U,
 #ifdef AUTODRIFT
+    .unit_id = 0x13U,
     .name = "Drum Evo",                                   // Evo variant: evolving pattern
 #else
+    .unit_id = 0x03U,
     .name = "Drum",
 #endif
     .num_params = 8,
