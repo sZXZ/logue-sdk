@@ -17,7 +17,11 @@ const __unit_header genericfx_unit_header_t unit_header = {
     .dev_id = 0x735A585A,
     .unit_id = 0x03U,
     .version = 0x00010000U,
+#ifdef AUTODRIFT
+    .name = "Drum Evo",                                   // Evo variant: evolving pattern
+#else
     .name = "Drum",
+#endif
     .num_params = 8,
 
     .params = {

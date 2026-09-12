@@ -35,6 +35,19 @@ LDDIR ?= $(PROJECT_ROOT)/../ld
 include config.mk
 
 ##############################################################################
+# Build variants
+#
+# `make` builds the base project (<PROJECT>) plus an "<PROJECT>_evo" variant
+# with automatic pattern drift enabled via -DAUTODRIFT. The name shown on the
+# device is selected in header.c by the same macro.
+#
+
+VARIANTS := $(PROJECT) $(PROJECT)_evo
+
+variant_$(PROJECT)_defines :=
+variant_$(PROJECT)_evo_defines := -DAUTODRIFT
+
+##############################################################################
 # Common defaults
 #
 
@@ -97,7 +110,7 @@ TOPT := -mthumb -mno-thumb-interwork -DTHUMB_NO_INTERWORKING -DTHUMB_PRESENT
 
 PRODUCT := $(PROJECT).nts3unit
 
-BUILDDIR := $(PROJECT_ROOT)/build
+BUILDDIR := $(PROJECT_ROOT)/build/$(PROJECT)
 OBJDIR := $(BUILDDIR)/obj
 LSTDIR := $(BUILDDIR)/lst
 
@@ -139,7 +152,7 @@ LIBDIR := $(patsubst %,-I%,$(DLIBDIR) $(ULIBDIR))
 #
 SANDBOXDIR ?= $(PROJECT_ROOT)/../../../websim
 WASMSRC := wasm.cc $(UCSRC) $(UCXXSRC) $(wildcard $(PROJECT_ROOT)/../../../websim/dsp/*.c) $(wildcard $(PROJECT_ROOT)/../../../websim/dsp/*.cpp)
-WASMDIR := $(PROJECT_ROOT)/sim
+WASMDIR := $(PROJECT_ROOT)/sim/$(PROJECT)
 DINCDIR += $(TOOLSDIR)/emsdk/upstream/emscripten/system/include
 EMCC_BIN_PATH := $(TOOLSDIR)/emsdk/upstream/emscripten
 
@@ -165,13 +178,20 @@ OUTFILES := $(BUILDDIR)/$(PROJECT).elf \
 # Targets
 #
 
-all: PRE_ALL $(OBJS) $(OUTFILES) POST_ALL
+all: PRE_ALL $(addprefix $(PROJECT_ROOT)/, $(addsuffix .nts3unit, $(VARIANTS))) POST_ALL
 	@echo Done
 	@echo
 
 PRE_ALL:
 
 POST_ALL:
+
+# Build + install a single variant via a recursive make carrying its defines
+# (e.g. acid, acid_evo / drum, drum_evo). The evo variants enable automatic
+# pattern drift; see effect.h and header.c.
+$(PROJECT_ROOT)/%.nts3unit:
+	@echo "=== Building variant $* ==="
+	$(MAKE) PROJECT=$* UDEFS="$(variant_$*_defines)" install
 
 $(OBJS): | $(BUILDDIR) $(OBJDIR) $(LSTDIR)
 
@@ -229,7 +249,7 @@ $(BUILDDIR)/%.elf: $(OBJS) $(LDSCRIPT)
 
 clean:
 	@echo Cleaning
-	-rm -fR $(PROJECT_ROOT)/.dep $(BUILDDIR) $(PROJECT_ROOT)/$(PRODUCT) $(WASMDIR)
+	-rm -fR $(PROJECT_ROOT)/.dep $(PROJECT_ROOT)/build $(PROJECT_ROOT)/sim $(PROJECT_ROOT)/$(PROJECT)*.nts3unit
 	@echo Done
 	@echo
 
@@ -251,7 +271,7 @@ wasm:
 	@cp -r $(SANDBOXDIR)/scripts $(WASMDIR)/
 	@cp -r $(SANDBOXDIR)/images $(WASMDIR)/
 	@cp -r $(WASMSRC) $(WASMDIR)/
-	@$(EMCC_BIN_PATH)/emcc -Wno-unknown-attributes -Wno-limited-postlink-optimizations $(INCDIR) \
+	@$(EMCC_BIN_PATH)/emcc -Wno-unknown-attributes -Wno-limited-postlink-optimizations $(UDEFS) $(INCDIR) \
 		-s AUDIO_WORKLET=1 \
 		-s WASM_WORKERS=1 \
 		-lembind \

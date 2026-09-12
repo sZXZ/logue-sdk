@@ -25,6 +25,7 @@ The `k_unit_param_type_msec` descriptor expresses values up to 2000 ms (beyond t
   - **Snare** steps: typically falls on beats 5 and 13 (2 & 4) with occasional ghost hits.
   - **Hi-hat** steps: dense, often every step or every other step, thinned by `DENSITY`.
 - **Euclidean rhythm**: `DENSITY` applies a Björklund algorithm to mask the raw LCG pattern, keeping `K` of the 16 steps active across the combined grid.
+- **Evo drift (build option **`-DAUTODRIFT`**, built as **`drum_evo`**)**: turns the static pattern into an evolving one. Once per bar 1–4 hits are toggled or nudged (kick/snare/hat, hats kept on active Euclidean steps) so the groove drifts over time; the downbeat kick always stays.
 - **Kick voice**: pitched sine sweep (~170 → 40 Hz using `osc_sinf`), driven by a ~1 ms attack ramp and a linear decay to silence over the kick note length. Sweep depth and note length scale with `KICK` and `DECAY`.
 - **Snare voice**: sum of a short sine body (tuned by `TONE`, ~150–280 Hz) and a filtered noise burst. Noise generated via `osc_rand`, high-pass filtered to ~800 Hz. Amplitude envelope: fast attack, linear decay (~20–65 ms default, scaled by `DECAY`).
 - **Hi-hat voice**: band-pass filtered white noise (`osc_rand`) centered around 8–10 kHz, with `TONE` tilting the center frequency. Decay controlled jointly by `HIHAT` range (closed/open) and `DECAY`.
@@ -43,5 +44,8 @@ The `k_unit_param_type_msec` descriptor expresses values up to 2000 ms (beyond t
 
 ### Build
 
-- **Hardware**: `make` → `make install` produces `drums.nts3unit`.
+- **Hardware**: `make` builds and installs both variants:
+  - `drum.nts3unit` — static pattern (default).
+  - `drum_evo.nts3unit` — automatic pattern drift (`-DAUTODRIFT`), display name "Drum Evo".
+  - Single variant: `make` target per unit (e.g. `make` in a clean dir, or `make PROJECT=drum_evo UDEFS=-DAUTODRIFT install`).
 - **Simulator**: restage `sim/` assets from `websim/` and compile `wasm.cc header.c unit.cc effect.h` with the emscripten SDK (see `Makefile`).

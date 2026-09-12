@@ -8,6 +8,10 @@
  *    - 16-step tempo-synced drum sequencer (16ths) at host BPM
  *    - "PATTERN" seed deterministically generates kick / snare / hi-hat patterns via LCG
  *    - "DENSITY" uses a Bjorklund Euclidean rhythm to control active steps (1..16)
+ *
+ *  Build option -DAUTODRIFT (the "<name>_evo" variants) turns the static
+ *  pattern into an evolving one: once per bar a handful of steps are softly
+ *  mutated so the groove drifts over time.
  *    - Kick: tuned sine sweep (~60 -> 30 Hz), beater transient, analog saturation
  *    - Snare: tuned sine body (150..280 Hz) + high-passed noise burst (~800 Hz)
  *    - Hi-Hat: band-pass filtered metallic noise (8..10 kHz), closed / open modes
@@ -323,6 +327,11 @@ public:
           step_ = host_step;
           clock_accum_ = 0.f;
 
+#ifdef AUTODRIFT
+          if (host_step == 0)
+            driftPattern();
+#endif
+
           if (gate_ && euclid_mask_[step_])
           {
             if (kick_hit_[step_])
@@ -339,6 +348,11 @@ public:
       {
         clock_accum_ -= samples_per_step_;
         step_ = (step_ + 1) & k_step_mask;
+
+#ifdef AUTODRIFT
+        if (step_ == 0)
+          driftPattern();
+#endif
 
         if (gate_ && euclid_mask_[step_])
         {
@@ -629,6 +643,9 @@ private:
     }
 
     kick_hit_[0] = 1;
+#ifdef AUTODRIFT
+    drift_state_ = 0x9E3779B9u ^ (uint32_t)(params_.pattern + 1) * 0x85EBCA6Bu;
+#endif
   }
 
   void regenEuclid()
@@ -647,6 +664,56 @@ private:
     }
   }
 
+#ifdef AUTODRIFT
+  // Evolving pattern: once per bar, softly mutate a few hits so the groove
+  // drifts over time. The downbeat kick and the "every active step sounds"
+  // guarantee are re-applied to keep the rhythm solid.
+  void driftPattern()
+  {
+    drift_state_ = drift_state_ * 1664525u + 1013904223u;
+    const uint32_t r0 = drift_state_ >> 16;
+    const uint8_t mutations = 1u + (uint8_t)(r0 & 3u);
+
+    for (uint8_t m = 0; m < mutations; ++m)
+    {
+      drift_state_ = drift_state_ * 1664525u + 1013904223u;
+      const uint32_t r1 = drift_state_ >> 16;
+      const uint8_t i = 1u + (uint8_t)(r1 & 0x0Fu); // skip the downbeat
+
+      drift_state_ = drift_state_ * 1664525u + 1013904223u;
+      const uint32_t r2 = drift_state_ >> 16;
+
+      switch (r2 & 3u)
+      {
+      case 0:
+        kick_hit_[i] ^= 1;
+        break;
+      case 1:
+        snare_hit_[i] ^= 1;
+        break;
+      case 2:
+        hihat_hit_[i] ^= 1;
+        break;
+      default:
+        // Keep a voice firing on active Euclidean steps; drift hats elsewhere.
+        if (euclid_mask_[i])
+          hihat_hit_[i] = 1;
+        else
+          hihat_hit_[i] ^= 1;
+        break;
+      }
+    }
+
+    kick_hit_[0] = 1;
+
+    for (uint8_t i = 0; i < k_num_steps; ++i)
+    {
+      if (euclid_mask_[i] && !kick_hit_[i] && !snare_hit_[i] && !hihat_hit_[i])
+        hihat_hit_[i] = 1;
+    }
+  }
+#endif
+
   Params params_;
 
   // Generative patterns
@@ -656,6 +723,9 @@ private:
   uint8_t euclid_mask_[k_num_steps];
   bool pattern_dirty_;
   bool density_dirty_;
+#ifdef AUTODRIFT
+  uint32_t drift_state_; // evolving-pattern mutation RNG
+#endif
 
   // Sequencer state
   uint8_t step_;

@@ -23,6 +23,7 @@ The `k_unit_param_type_msec` descriptor can express values larger than the usual
 - **Generative pattern**: `PATTERN` seeds a lightweight LCG that fills 16 steps with:
   - **Pitch** from a natural-minor scale (`{0, 2, 3, 5, 7, 8, 10, 12}` semitones), biased strongly toward the root and fifth for a driving line. Step 1 is always the root + accent.
   - **Accent** on ~44% of steps, **Slide** on ~25%.
+- **Evo drift (build option **`-DAUTODRIFT`**, built as **`acid_evo`**)**: turns the static pattern into an evolving one. Once per bar 1–4 steps are softly mutated (pitch nudged toward the root/fifth or another scale degree, accents/slides toggled) so the bassline drifts over time; beat 1 always stays root + accent.
 - **Euclidean rhythm**: `DENSITY` uses a Björklund algorithm to spread `K` active steps evenly across the 16-step bar.
 - **Envelope**: linear attack (~1.2 ms), decay (= `DECAY`), release (~25 ms, shortened by `ACID`). Legato slides continue from the current amplitude (no re-attack → click-free), otherwise steps retrigger.
 - **Oscillator**: band-limited wavetable Saw / Square (`osc_bl2_sawf` / `osc_bl2_sqrf`) with fractional-note phase stepping.
@@ -42,5 +43,8 @@ The `k_unit_param_type_msec` descriptor can express values larger than the usual
 
 ### Build
 
-- **Hardware**: `make` → `make install` produces `acid.nts3unit`.
+- **Hardware**: `make` builds and installs both variants:
+  - `acid.nts3unit` — static pattern (default).
+  - `acid_evo.nts3unit` — automatic pattern drift (`-DAUTODRIFT`), display name "ACID Base Evo".
+  - Single variant: `make` target per unit (e.g. `make` in a clean dir, or `make PROJECT=acid_evo UDEFS=-DAUTODRIFT install`).
 - **Simulator**: restage `sim/` assets from `websim/` and compile `wasm.cc header.c unit.cc` with the emscripten SDK (see `Makefile`).

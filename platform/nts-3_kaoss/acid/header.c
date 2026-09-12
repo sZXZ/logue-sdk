@@ -17,8 +17,12 @@ const __unit_header genericfx_unit_header_t unit_header = {
     .dev_id = 0x735A585A,
     .unit_id = 0x02U,
     .version = 0x00010000U,
-    .name = "ACID Base",                                        // Name for this unit, will be displayed on device
-    .num_params = 8,                                          // Number of valid parameter descriptors. (max. 8)
+#ifdef AUTODRIFT
+    .name = "ACID Base Evo",                              // Evo variant: evolving pattern
+#else
+    .name = "ACID Base",                                  // Name for this unit, will be displayed on device
+#endif
+    .num_params = 8,                                      // Number of valid parameter descriptors. (max. 8)
 
     .params = {
       // Format: min, max, center (unused), default, type, frac. bits, frac. mode, <reserved>, name

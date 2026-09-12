@@ -10,6 +10,10 @@
  *    - Generative 16-step sequencer (16ths) at host BPM
  *    - "PATTERN" seed deterministically generates pitch / accent / slide data
  *      on a natural-minor scale via a lightweight LCG
+ *
+ *  Build option -DAUTODRIFT (the "<name>_evo" variants) turns the static pattern
+ *  into an evolving one: once per bar a few steps are softly mutated so the
+ *  bassline drifts over time instead of looping forever.
  *    - "DENSITY" uses a Bjorklund Euclidean rhythm to spread K active steps
  *      evenly across the 16-step bar
  *    - Band-limited (wavetable) Saw / Square oscillator
@@ -284,6 +288,11 @@ public:
           step_ = host_step;
           clock_accum_ = 0.f;
 
+#ifdef AUTODRIFT
+          if (host_step == 0)
+            driftPattern();
+#endif
+
           if (gate_ && hit_[step_])
           {
             const float n = p.root + (float)pitch_[step_];
@@ -311,6 +320,11 @@ public:
       {
         clock_accum_ -= samples_per_step_;
         step_ = (step_ + 1) & k_step_mask;
+
+#ifdef AUTODRIFT
+        if (step_ == 0)
+          driftPattern();
+#endif
 
         if (gate_ && hit_[step_])
         {
@@ -493,6 +507,9 @@ private:
     pitch_[0] = 0;
     accent_[0] = 1;
     slide_[0] = 0;
+#ifdef AUTODRIFT
+    drift_state_ = 0x9E3779B9u ^ (uint32_t)(params_.pattern + 1) * 0x85EBCA6Bu;
+#endif
   }
 
   // Regenerate the Euclidean hit pattern from DENSITY (K pulses 1..16).
@@ -507,6 +524,46 @@ private:
     euclid(k, k_num_steps, hit_);
   }
 
+#ifdef AUTODRIFT
+  // Evolving pattern: once per bar, softly mutate a few steps so the bassline
+  // drifts over time. Root / fifth stay dominant to keep the line driving.
+  void driftPattern()
+  {
+    drift_state_ = drift_state_ * 1664525u + 1013904223u;
+    const uint32_t r0 = drift_state_ >> 16;
+    const uint8_t mutations = 1u + (uint8_t)(r0 & 3u);
+
+    for (uint8_t m = 0; m < mutations; ++m)
+    {
+      drift_state_ = drift_state_ * 1664525u + 1013904223u;
+      const uint32_t r1 = drift_state_ >> 16;
+      const uint8_t i = (uint8_t)(r1 & 0x0Fu); // step 0..15
+
+      drift_state_ = drift_state_ * 1664525u + 1013904223u;
+      const uint32_t r2 = drift_state_ >> 16;
+
+      switch (r2 & 3u)
+      {
+      case 0:
+      case 1:
+        // Move toward the root or fifth.
+        pitch_[i] = (r2 & 8u) ? k_scale[4] : 0;
+        break;
+      case 2:
+        accent_[i] ^= 1;
+        break;
+      default:
+        pitch_[i] = k_scale[1 + (r2 >> 8) % 7];
+        break;
+      }
+    }
+    // Beat one always lands on the root + accent for a solid bar reset.
+    pitch_[0] = 0;
+    accent_[0] = 1;
+    slide_[0] = 0;
+  }
+#endif
+
   float *buffer_; // valid range:  [buffer_, buffer_ + getBufferSize())
   Params params_;
 
@@ -517,6 +574,9 @@ private:
   uint8_t hit_[k_num_steps];
   bool pattern_dirty_;
   bool density_dirty_;
+#ifdef AUTODRIFT
+  uint32_t drift_state_; // evolving-pattern mutation RNG
+#endif
 
   // sequencer state
   uint8_t step_;
