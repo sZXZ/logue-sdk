@@ -18,9 +18,9 @@ const __unit_header genericfx_unit_header_t unit_header = {
     .unit_id = 0x02U,
     .version = 0x00010000U,
 #ifdef AUTODRIFT
-    .name = "ACID Base Evo",                              // Evo variant: evolving pattern
+    .name = "ACID Bass Evo",                              // Evo variant: evolving pattern
 #else
-    .name = "ACID Base",                                  // Name for this unit, will be displayed on device
+    .name = "ACID Bass",                                  // Name for this unit, will be displayed on device
 #endif
     .num_params = 8,                                      // Number of valid parameter descriptors. (max. 8)
 

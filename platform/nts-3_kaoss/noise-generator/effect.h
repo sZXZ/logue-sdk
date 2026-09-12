@@ -211,8 +211,8 @@ public:
       const float pan_r = osc_sinf(angle * 0.159154943f);
 
       // Apply panning (out_p[0] is Left, out_p[1] is Right)
-      out_p[0] = in_p[0] * dry + out_val * pan_l * wet;
-      out_p[1] = in_p[1] * dry + out_val * pan_r * wet;
+      out_p[0] = in_p[0] * dry + out_val * pan_r * wet;
+      out_p[1] = in_p[1] * dry + out_val * pan_l * wet;
     }
   }
 
