@@ -31,7 +31,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
       {0, 1023, 0, 0, k_unit_param_type_none, 0, 0, 0, {"WAVE"}},
 
       // ROOT: bass transposition, displayed as musical pitch (C0..G9)
-      {0, 1023, 0, 280, k_unit_param_type_midi_note, 0, 0, 0, {"ROOT"}},
+      {0, 1023, 0, 237, k_unit_param_type_midi_note, 0, 0, 0, {"ROOT"}},
 
       // PATTERN: seed that generates the pitch/accent/slide sequence
       {0, 1023, 0, 512, k_unit_param_type_none, 0, 0, 0, {"PATTERN"}},
@@ -60,7 +60,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
 
     // WAVE, ROOT, PATTERN, DENSITY, DECAY, ACID not mapped to pad (edited via menu)
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 0},
-    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 198, 442, 280},
+    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 198, 442, 237},
     {k_genericfx_param_assign_depth, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 1, 16, 12},
 

@@ -2,7 +2,7 @@
 # Configuration for Makefile
 #
 
-PROJECT := nts3_clouds
+PROJECT := granular
 PROJECT_TYPE := genericfx
 
 ##############################################################################
@@ -13,7 +13,7 @@ PROJECT_TYPE := genericfx
 UCSRC = header.c
 
 # C++ sources
-UCXXSRC = unit.cc nts3_clouds.cpp
+UCXXSRC = unit.cc granular.cpp
 
 # List ASM source files here
 UASMSRC =

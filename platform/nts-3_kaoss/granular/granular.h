@@ -1,6 +1,6 @@
 #pragma once
 /*
- *  File: nts3_clouds.h
+ *  File: granular.h
  *
  *  NTS-3 "Clouds" granular synthesizer - class definition.
  *

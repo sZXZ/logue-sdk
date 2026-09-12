@@ -6,7 +6,7 @@
 #include <emscripten/em_math.h>
 using namespace emscripten;
 
-#include "nts3_clouds.h"
+#include "granular.h"
 
 // this needs to be big enough for the stereo output, inputs, params and the worker stack
 uint8_t audioThreadStack[4096];

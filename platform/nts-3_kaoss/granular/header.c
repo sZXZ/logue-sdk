@@ -50,7 +50,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
     .dev_id = 0x735A585A,                                     // Developer ID
     .unit_id = 0x10U,                                         // unit ID
     .version = 0x00010000U,                                   // 1.0.0
-    .name = "Grinder",                                        // shown on device
+    .name = "BeanGrinder",                                    // shown on device
     .num_params = 8,                                          // number of params
 
     .params = {

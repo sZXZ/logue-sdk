@@ -1,5 +1,5 @@
 /*
- *  File: nts3_clouds.cpp
+ *  File: granular.cpp
  *
  *  NTS-3 "Clouds" granular synthesizer - implementation.
  *
@@ -24,7 +24,7 @@
  *    - Heavy per-sample work is bounded by kMaxGrains voice stealing.
  */
 
-#include "nts3_clouds.h"
+#include "granular.h"
 
 #include <cmath>
 #include <cstdio>

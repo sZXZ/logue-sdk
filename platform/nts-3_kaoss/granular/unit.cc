@@ -42,7 +42,7 @@
 #include "utils/int_math.h"
 #include <algorithm>
 
-#include "nts3_clouds.h"
+#include "granular.h"
 
 // newlib's vfprintf machinery references the weak `_printf_float` hook from
 // <cstdio> even when only integer format specifiers are used. The NTS-3

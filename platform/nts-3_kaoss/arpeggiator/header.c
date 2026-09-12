@@ -21,7 +21,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
 
             .params =
                 {// 0: ROOT (X mapping)
-                 {0, 1023, 0, 190, k_unit_param_type_midi_note, 0, 0, 0, {"ROOT"}},
+                 {0, 1023, 0, 237, k_unit_param_type_midi_note, 0, 0, 0, {"ROOT"}},
 
                  // 1: CHORD (Y mapping)
                  {0, 10, 0, 2, k_unit_param_type_strings, 0, 0, 0, {"CHORD"}},
@@ -48,7 +48,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
         //k_genericfx_param_assign_none k_genericfx_param_assign_y k_genericfx_param_assign_x k_genericfx_param_assign_depth
         // ROOT - 
         {k_genericfx_param_assign_none, k_genericfx_curve_linear,
-         k_genericfx_curve_unipolar, 0, 1023, 190},
+         k_genericfx_curve_unipolar, 0, 1023, 237},
 
         // CHORD mapped to Y axis
         {k_genericfx_param_assign_none, k_genericfx_curve_linear,
