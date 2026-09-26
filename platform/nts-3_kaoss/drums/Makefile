@@ -37,20 +37,24 @@ include config.mk
 ##############################################################################
 # Build variants
 #
-# `make` builds the base project (<PROJECT>) plus three variants:
-#   <PROJECT>_evo  automatic pattern drift enabled via -DAUTODRIFT
-#   <PROJECT>_L    generated signal added to the left output only (-DUNIT_OUT_LEFT)
-#   <PROJECT>_R    generated signal added to the right output only (-DUNIT_OUT_RIGHT)
+# `make` builds the base project (<PROJECT>) plus five variants:
+#   <PROJECT>_evo      automatic pattern drift enabled via -DAUTODRIFT
+#   <PROJECT>_L        generated signal added to the left output only (-DUNIT_OUT_LEFT)
+#   <PROJECT>_R        generated signal added to the right output only (-DUNIT_OUT_RIGHT)
+#   <PROJECT>_evo_L    both of the above
+#   <PROJECT>_evo_R    both of the above
 # The name and unit id shown on the device are selected in header.c by the same
 # macros, and the output side is applied in effect.h.
 #
 
-VARIANTS := $(PROJECT) $(PROJECT)_evo $(PROJECT)_L $(PROJECT)_R
+VARIANTS := $(PROJECT) $(PROJECT)_evo $(PROJECT)_L $(PROJECT)_R $(PROJECT)_evo_L $(PROJECT)_evo_R
 
 variant_$(PROJECT)_defines :=
 variant_$(PROJECT)_evo_defines := -DAUTODRIFT
 variant_$(PROJECT)_L_defines := -DUNIT_OUT_LEFT
 variant_$(PROJECT)_R_defines := -DUNIT_OUT_RIGHT
+variant_$(PROJECT)_evo_L_defines := -DAUTODRIFT -DUNIT_OUT_LEFT
+variant_$(PROJECT)_evo_R_defines := -DAUTODRIFT -DUNIT_OUT_RIGHT
 
 ##############################################################################
 # Common defaults

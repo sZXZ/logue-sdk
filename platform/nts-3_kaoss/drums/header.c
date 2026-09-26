@@ -7,6 +7,33 @@
 
 #include "unit_genericfx.h"
 
+// ---- Variant selection (see Makefile) ---------------------------------------------
+// The build macros are independent and combine freely:
+//   AUTODRIFT     evolving pattern instead of a static one
+//   UNIT_OUT_*    the generated drums are added to a single output channel only
+// Every variant gets its own unit id so several of them can be loaded into the
+// effect chain of the same device at the same time.
+
+#if defined(UNIT_OUT_LEFT) && defined(AUTODRIFT)
+#define DRUM_VARIANT_ID   0x43U
+#define DRUM_VARIANT_NAME "Drum Evo L"
+#elif defined(UNIT_OUT_RIGHT) && defined(AUTODRIFT)
+#define DRUM_VARIANT_ID   0x53U
+#define DRUM_VARIANT_NAME "Drum Evo R"
+#elif defined(UNIT_OUT_LEFT)
+#define DRUM_VARIANT_ID   0x23U
+#define DRUM_VARIANT_NAME "Drum L"
+#elif defined(UNIT_OUT_RIGHT)
+#define DRUM_VARIANT_ID   0x33U
+#define DRUM_VARIANT_NAME "Drum R"
+#elif defined(AUTODRIFT)
+#define DRUM_VARIANT_ID   0x13U
+#define DRUM_VARIANT_NAME "Drum Evo"
+#else
+#define DRUM_VARIANT_ID   0x03U
+#define DRUM_VARIANT_NAME "Drum"
+#endif
+
 // ---- Unit header definition -------------------------------------------------
 
 const __unit_header genericfx_unit_header_t unit_header = {
@@ -15,22 +42,9 @@ const __unit_header genericfx_unit_header_t unit_header = {
     .target = UNIT_TARGET_PLATFORM | k_unit_module_genericfx,
     .api = UNIT_API_VERSION,
     .dev_id = 0x735A585A,
+    .unit_id = DRUM_VARIANT_ID,
     .version = 0x00010000U,
-// Every variant gets its own unit id so several of them can be loaded into the
-// effect chain of the same device at the same time.
-#if defined(UNIT_OUT_LEFT)
-    .unit_id = 0x23U,
-    .name = "Drum L",                                     // Left-only variant: drums on the left channel
-#elif defined(UNIT_OUT_RIGHT)
-    .unit_id = 0x33U,
-    .name = "Drum R",                                     // Right-only variant: drums on the right channel
-#elif defined(AUTODRIFT)
-    .unit_id = 0x13U,
-    .name = "Drum Evo",                                   // Evo variant: evolving pattern
-#else
-    .unit_id = 0x03U,
-    .name = "Drum",
-#endif
+    .name = DRUM_VARIANT_NAME,
     .num_params = 8,
 
     .params = {

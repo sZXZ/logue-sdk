@@ -7,6 +7,31 @@
 
 #include "unit_genericfx.h"   // Note: Include base definitions for genericfx units
 
+// ---- Variant selection (see Makefile) ---------------------------------------------
+// The build macros are independent and combine freely:
+//   AUTODRIFT     evolving pattern instead of a static one
+//   UNIT_OUT_*    the generated bass is added to a single output channel only
+
+#if defined(UNIT_OUT_LEFT) && defined(AUTODRIFT)
+#define ACID_VARIANT_ID   0x32U
+#define ACID_VARIANT_NAME "ACID Bass Evo L"
+#elif defined(UNIT_OUT_RIGHT) && defined(AUTODRIFT)
+#define ACID_VARIANT_ID   0x42U
+#define ACID_VARIANT_NAME "ACID Bass Evo R"
+#elif defined(UNIT_OUT_LEFT)
+#define ACID_VARIANT_ID   0x12U
+#define ACID_VARIANT_NAME "ACID Bass L"
+#elif defined(UNIT_OUT_RIGHT)
+#define ACID_VARIANT_ID   0x22U
+#define ACID_VARIANT_NAME "ACID Bass R"
+#elif defined(AUTODRIFT)
+#define ACID_VARIANT_ID   0x02U
+#define ACID_VARIANT_NAME "ACID Bass Evo"
+#else
+#define ACID_VARIANT_ID   0x02U
+#define ACID_VARIANT_NAME "ACID Bass"
+#endif
+
 // ---- Unit header definition  --------------------------------------------------------------------
 
 const __unit_header genericfx_unit_header_t unit_header = {
@@ -15,24 +40,10 @@ const __unit_header genericfx_unit_header_t unit_header = {
     .target = UNIT_TARGET_PLATFORM | k_unit_module_genericfx, // Target platform and module pair for this unit
     .api = UNIT_API_VERSION,                                  // API version for which unit was built. See runtime.h
     .dev_id = 0x735A585A,
-#if defined(UNIT_OUT_LEFT)
-    .unit_id = 0x12U,
-#elif defined(UNIT_OUT_RIGHT)
-    .unit_id = 0x22U,
-#else
-    .unit_id = 0x02U,
-#endif
+    .unit_id = ACID_VARIANT_ID,
     .version = 0x00010000U,
-#if defined(UNIT_OUT_LEFT)
-    .name = "ACID Bass L",                             // Left-only variant: bass on the left channel
-#elif defined(UNIT_OUT_RIGHT)
-    .name = "ACID Bass R",                             // Right-only variant: bass on the right channel
-#elif defined(AUTODRIFT)
-    .name = "ACID Bass Evo",                           // Evo variant: evolving pattern
-#else
-    .name = "ACID Bass",                               // Name for this unit, will be displayed on device
-#endif
-    .num_params = 8,                                      // Number of valid parameter descriptors. (max. 8)
+    .name = ACID_VARIANT_NAME,                                // Name for this unit, will be displayed on device
+    .num_params = 8,                                          // Number of valid parameter descriptors. (max. 8)
 
     .params = {
       // Format: min, max, center (unused), default, type, frac. bits, frac. mode, <reserved>, name

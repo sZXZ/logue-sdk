@@ -24,7 +24,7 @@ The `k_unit_param_type_msec` descriptor can express values larger than the usual
   - **Pitch** from a natural-minor scale (`{0, 2, 3, 5, 7, 8, 10, 12}` semitones), biased strongly toward the root and fifth for a driving line. Step 1 is always the root + accent.
   - **Accent** on ~44% of steps, **Slide** on ~25%.
 - **Evo drift (build option **`-DAUTODRIFT`**, built as **`acid_evo`**)**: turns the static pattern into an evolving one. Once per bar 1–4 steps are softly mutated (pitch nudged toward the root/fifth or another scale degree, accents/slides toggled) so the bassline drifts over time; beat 1 always stays root + accent.
-- **Channel split (build options **`-DUNIT_OUT_LEFT`** / **`-DUNIT_OUT_RIGHT`**, built as **`acid_L`** / **`acid_R`**)**: the generated bass is added to one output channel only, while the dry input still passes on both. Chaining `acid_L` then `acid_R` in the effect chain therefore gives one bass on the left and one on the right, so the two can be mixed (or panned apart) as separate instruments.
+- **Channel split (build options **`-DUNIT_OUT_LEFT`** / **`-DUNIT_OUT_RIGHT`**, built as **`acid_L`** / **`acid_R`**, and combined with evo as **`acid_evo_L`** / **`acid_evo_R`**)**: the generated bass is added to one output channel only, while the dry input still passes on both. Chaining `acid_L` then `acid_R` in the effect chain therefore gives one bass on the left and one on the right, so the two can be mixed (or panned apart) as separate instruments.
 - **Euclidean rhythm**: `DENSITY` uses a Björklund algorithm to spread `K` active steps evenly across the 16-step bar.
 - **Envelope**: linear attack (~1.2 ms), decay (= `DECAY`), release (~25 ms, shortened by `ACID`). Legato slides continue from the current amplitude (no re-attack → click-free), otherwise steps retrigger.
 - **Oscillator**: band-limited wavetable Saw / Square (`osc_bl2_sawf` / `osc_bl2_sqrf`) with fractional-note phase stepping.
@@ -44,10 +44,12 @@ The `k_unit_param_type_msec` descriptor can express values larger than the usual
 
 ### Build
 
-- **Hardware**: `make` builds and installs all four variants:
+- **Hardware**: `make` builds and installs all six variants:
   - `acid.nts3unit` — static pattern, bass on both channels (default).
   - `acid_evo.nts3unit` — automatic pattern drift (`-DAUTODRIFT`), display name "ACID Bass Evo".
   - `acid_L.nts3unit` — bass added to the left channel only (`-DUNIT_OUT_LEFT`), display name "ACID Bass L".
   - `acid_R.nts3unit` — bass added to the right channel only (`-DUNIT_OUT_RIGHT`), display name "ACID Bass R".
+  - `acid_evo_L.nts3unit` — drifting pattern, left channel only, display name "ACID Bass Evo L".
+  - `acid_evo_R.nts3unit` — drifting pattern, right channel only, display name "ACID Bass Evo R".
   - Single variant: `make` target per unit (e.g. `make` in a clean dir, or `make PROJECT=acid_evo UDEFS=-DAUTODRIFT install`).
 - **Simulator**: restage `sim/` assets from `websim/` and compile `wasm.cc header.c unit.cc` with the emscripten SDK (see `Makefile`).
