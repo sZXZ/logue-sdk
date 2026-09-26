@@ -21,6 +21,11 @@
  *    - 4-stage Moog-ladder resonant low-pass filter with tanh saturation
  *    - Generous linear-attack / decay / release envelope on the VCA and VCF
  *
+ *  Build options -DUNIT_OUT_LEFT / -DUNIT_OUT_RIGHT (the "<name>_L" / "<name>_R"
+ *  variants) place the generated bass on a single output channel while the input
+ *  still passes on both, so two copies can be chained and mixed as separate
+ *  instruments.
+ *
  *  The clock keeps running whenever tempo is applied, but audio only sounds
  *  while the KAOSS pad is touched. X axis sweeps filter cutoff, Y axis the
  *  resonance. "ACID" is a strong macro that scales the filter squelch
@@ -49,23 +54,45 @@ static inline uint32_t lcg_next(uint32_t &state)
   return state >> 16; // top 16 bits have the longest period quality
 }
 
-// Bjorklund Euclidean rhythm: spread `pulses` onsets as evenly as possible
-// across `steps_` positions.
-static inline void euclid(uint8_t pulses, uint8_t steps_, uint8_t gates[16])
-{
-  for (uint8_t i = 0; i < steps_; ++i)
-    gates[i] = 0;
-  if (pulses == 0)
-    return;
-
-  const uint8_t pitch = steps_ / pulses; // base gap
-  const uint8_t rem = steps_ % pulses;   // steps to make slightly wider
-  uint8_t index = 0;
-  for (uint8_t i = 0; i < pulses; ++i)
+  // Bjorklund Euclidean rhythm: spread `pulses` onsets as evenly as possible
+  // across `steps_` positions.
+  static inline void euclid(uint8_t pulses, uint8_t steps_, uint8_t gates[16])
   {
-    gates[index] = 1;
-    index += pitch + (i < rem ? 1 : 0);
+    for (uint8_t i = 0; i < steps_; ++i)
+      gates[i] = 0;
+    if (pulses == 0)
+      return;
+
+    const uint8_t pitch = steps_ / pulses; // base gap
+    const uint8_t rem = steps_ % pulses;   // steps to make slightly wider
+    uint8_t index = 0;
+    for (uint8_t i = 0; i < pulses; ++i)
+    {
+      gates[index] = 1;
+      index += pitch + (i < rem ? 1 : 0);
+    }
   }
+
+#if defined(UNIT_OUT_LEFT) && defined(UNIT_OUT_RIGHT)
+#error "UNIT_OUT_LEFT and UNIT_OUT_RIGHT are mutually exclusive"
+#endif
+
+// Write one sample pair. The dry input always passes on both channels; the
+// generated bass is added to a single side for the "_L" / "_R" build variants
+// (see the Makefile), so two copies of the unit can be chained and treated as
+// separate instruments.
+static inline void write_out(const float *in, float *out, float sig)
+{
+#if defined(UNIT_OUT_LEFT)
+  out[0] = in[0] + sig;
+  out[1] = in[1];
+#elif defined(UNIT_OUT_RIGHT)
+  out[0] = in[0];
+  out[1] = in[1] + sig;
+#else
+  out[0] = in[0] + sig;
+  out[1] = in[1] + sig;
+#endif
 }
 }
 
@@ -426,9 +453,9 @@ public:
       const float s = fx_softclipf(0.15f, out_sample);
 
       // Standard FX pass-through: dry input always passes, the generated acid
-      // signal is mixed on top (silent when idle / not touched).
-      out[0] = in[0] + s;
-      out[1] = in[1] + s;
+      // signal is mixed on top (silent when idle / not touched). The _L / _R
+      // variants add it to the left / right channel only.
+      write_out(in, out, s);
     }
   }
 

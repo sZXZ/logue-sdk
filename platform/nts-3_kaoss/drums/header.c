@@ -16,7 +16,15 @@ const __unit_header genericfx_unit_header_t unit_header = {
     .api = UNIT_API_VERSION,
     .dev_id = 0x735A585A,
     .version = 0x00010000U,
-#ifdef AUTODRIFT
+// Every variant gets its own unit id so several of them can be loaded into the
+// effect chain of the same device at the same time.
+#if defined(UNIT_OUT_LEFT)
+    .unit_id = 0x23U,
+    .name = "Drum L",                                     // Left-only variant: drums on the left channel
+#elif defined(UNIT_OUT_RIGHT)
+    .unit_id = 0x33U,
+    .name = "Drum R",                                     // Right-only variant: drums on the right channel
+#elif defined(AUTODRIFT)
     .unit_id = 0x13U,
     .name = "Drum Evo",                                   // Evo variant: evolving pattern
 #else

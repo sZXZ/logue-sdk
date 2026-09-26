@@ -15,12 +15,22 @@ const __unit_header genericfx_unit_header_t unit_header = {
     .target = UNIT_TARGET_PLATFORM | k_unit_module_genericfx, // Target platform and module pair for this unit
     .api = UNIT_API_VERSION,                                  // API version for which unit was built. See runtime.h
     .dev_id = 0x735A585A,
-    .unit_id = 0x02U,
-    .version = 0x00010000U,
-#ifdef AUTODRIFT
-    .name = "ACID Bass Evo",                              // Evo variant: evolving pattern
+#if defined(UNIT_OUT_LEFT)
+    .unit_id = 0x12U,
+#elif defined(UNIT_OUT_RIGHT)
+    .unit_id = 0x22U,
 #else
-    .name = "ACID Bass",                                  // Name for this unit, will be displayed on device
+    .unit_id = 0x02U,
+#endif
+    .version = 0x00010000U,
+#if defined(UNIT_OUT_LEFT)
+    .name = "ACID Bass L",                             // Left-only variant: bass on the left channel
+#elif defined(UNIT_OUT_RIGHT)
+    .name = "ACID Bass R",                             // Right-only variant: bass on the right channel
+#elif defined(AUTODRIFT)
+    .name = "ACID Bass Evo",                           // Evo variant: evolving pattern
+#else
+    .name = "ACID Bass",                               // Name for this unit, will be displayed on device
 #endif
     .num_params = 8,                                      // Number of valid parameter descriptors. (max. 8)
 

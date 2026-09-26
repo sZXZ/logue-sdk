@@ -37,15 +37,20 @@ include config.mk
 ##############################################################################
 # Build variants
 #
-# `make` builds the base project (<PROJECT>) plus an "<PROJECT>_evo" variant
-# with automatic pattern drift enabled via -DAUTODRIFT. The name shown on the
-# device is selected in header.c by the same macro.
+# `make` builds the base project (<PROJECT>) plus three variants:
+#   <PROJECT>_evo  automatic pattern drift enabled via -DAUTODRIFT
+#   <PROJECT>_L    generated signal added to the left output only (-DUNIT_OUT_LEFT)
+#   <PROJECT>_R    generated signal added to the right output only (-DUNIT_OUT_RIGHT)
+# The name and unit id shown on the device are selected in header.c by the same
+# macros, and the output side is applied in effect.h.
 #
 
-VARIANTS := $(PROJECT) $(PROJECT)_evo
+VARIANTS := $(PROJECT) $(PROJECT)_evo $(PROJECT)_L $(PROJECT)_R
 
 variant_$(PROJECT)_defines :=
 variant_$(PROJECT)_evo_defines := -DAUTODRIFT
+variant_$(PROJECT)_L_defines := -DUNIT_OUT_LEFT
+variant_$(PROJECT)_R_defines := -DUNIT_OUT_RIGHT
 
 ##############################################################################
 # Common defaults

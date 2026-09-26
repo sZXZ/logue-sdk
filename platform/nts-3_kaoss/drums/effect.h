@@ -24,6 +24,11 @@
  *  Audio passes through dry (`out = in + drums`) and drums only sound while
  *  the KAOSS pad is touched. X axis controls KICK punch/level, Y axis controls
  *  HIHAT level and closed/open character.
+ *
+ *  Build options -DUNIT_OUT_LEFT / -DUNIT_OUT_RIGHT (the "<name>_L" / "<name>_R"
+ *  variants) place the generated drums on a single output channel while the input
+ *  still passes on both, so two copies can be chained and mixed as separate
+ *  instruments.
  */
 
 #include "processor.h"
@@ -63,6 +68,28 @@ static inline void euclid(uint8_t pulses, uint8_t steps_, uint8_t gates[16])
     gates[index] = 1;
     index += pitch + (i < rem ? 1 : 0);
   }
+}
+
+#if defined(UNIT_OUT_LEFT) && defined(UNIT_OUT_RIGHT)
+#error "UNIT_OUT_LEFT and UNIT_OUT_RIGHT are mutually exclusive"
+#endif
+
+// Write one sample pair. The dry input always passes on both channels; the
+// generated drums are added to a single side for the "_L" / "_R" build variants
+// (see the Makefile), so two copies of the unit can be chained and treated as
+// separate instruments.
+static inline void write_out(const float *in, float *out, float sig)
+{
+#if defined(UNIT_OUT_LEFT)
+  out[0] = in[0] + sig;
+  out[1] = in[1];
+#elif defined(UNIT_OUT_RIGHT)
+  out[0] = in[0];
+  out[1] = in[1] + sig;
+#else
+  out[0] = in[0] + sig;
+  out[1] = in[1] + sig;
+#endif
 }
 }
 
@@ -481,9 +508,10 @@ public:
       const float sat = fx_softclipf(0.25f, driven) * drive_comp;
 
       // --- Master Out (Dry + Gated Drum Signal) -------------------------------
+      // The _L / _R variants add the gated drum signal to the left / right
+      // channel only; the dry input passes on both.
       const float drum_final = sat * touch_gain_;
-      out[0] = in[0] + drum_final;
-      out[1] = in[1] + drum_final;
+      write_out(in, out, drum_final);
     }
   }
 
