@@ -254,8 +254,6 @@ void WavetableOsc::triggerRoot()
 
 void WavetableOsc::process(const float *__restrict in, float *__restrict out, uint32_t frames)
 {
-  (void)in; // pure generator: the pad input is not used
-
   const Params p = params_;
   const bool drone = droneMode();
   const bool seq_on = p.pattern != 0;
@@ -289,7 +287,9 @@ void WavetableOsc::process(const float *__restrict in, float *__restrict out, ui
   const float inc_b = 1.f / ratio;
   const float sub_gain = p.sub * 0.5f;
 
-  for (uint32_t i = 0; i < frames; ++i, out += 2)
+  // `in` has to advance with `out`: the dry path reads the input pair of the
+  // same sample it is writing.
+  for (uint32_t i = 0; i < frames; ++i, in += 2, out += 2)
   {
     // --- Drone: always sounding, no envelope, no sequencer -------------------
     if (drone)
@@ -419,12 +419,18 @@ void WavetableOsc::process(const float *__restrict in, float *__restrict out, ui
     phase_sub_ -= (float)(uint32_t)phase_sub_;
     const float sq = osc_bl2_sqrf(phase_sub_, clipminmaxf(0.f, note_f - 12.f, 115.f) * (6.f / 127.f));
 
-    // --- Sum, VCA, soft clip ---------------------------------------------------
+    // --- Sum, VCA, soft clip, mix with the input ------------------------------
     const float lvl = amp_ * step_accent_ * 0.5f;
     const float sig_l = (a * al + b * bl + sub_gain * sq) * lvl;
     const float sig_r = (a * ar + b * br + sub_gain * sq) * lvl;
 
-    out[0] = fx_softclipf(0.15f, sig_l);
-    out[1] = fx_softclipf(0.15f, sig_r);
+    // Standard FX pass-through, the same convention as the acid unit: the dry
+    // input always passes on both channels at unity and the generated voice is
+    // mixed on top of it. The wet signal is soft clipped *before* it is added,
+    // so the dry path stays a clean passthrough and this is additive layering,
+    // not a crossfade -- the unit sits under whatever the pad is already
+    // playing instead of replacing it.
+    out[0] = in[0] + fx_softclipf(0.15f, sig_l);
+    out[1] = in[1] + fx_softclipf(0.15f, sig_r);
   }
 }

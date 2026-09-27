@@ -1,6 +1,6 @@
 ### NTS-3 kaoss pad "WT" — Wavetable Oscillator Unit
 
-A single-cycle **wavetable oscillator** for the NTS-3 kaoss pad, built as a `genericfx` unit. The audio input is ignored: the unit is a sound generator and simply replaces it (`out = wet`). Its distinguishing feature is the **build-time wavetable baker**: every `.wav` dropped into `wt/` is folded down to a single cycle, mip-mapped, quantized to `int16` and emitted as a generated C source. Each wav becomes **one build variant** (its own `.nts3unit`), so a folder of samples turns into a folder of units from a single `make`.
+A single-cycle **wavetable oscillator** for the NTS-3 kaoss pad, built as a `genericfx` unit. It **mixes with** the audio input rather than replacing it: the input passes through on both channels at unity and the generated wavetable voice is added on top, the same additive pass-through the acid unit uses. Its distinguishing feature is the **build-time wavetable baker**: every `.wav` dropped into `wt/` is folded down to a single cycle, mip-mapped, quantized to `int16` and emitted as a generated C source. Each wav becomes **one build variant** (its own `.nts3unit`), so a folder of samples turns into a folder of units from a single `make`.
 
 ---
 
@@ -19,7 +19,7 @@ A single-cycle **wavetable oscillator** for the NTS-3 kaoss pad, built as a `gen
 
 Descriptor rows use `{min, max, center, init, type, frac, frac_mode, reserved, {"NAME"}}`; only slots 1–8 are used (`num_params = 8`), and every mapping's `min/max/value` stays inside its descriptor range. Six of the eight are plain `0..1023`; PITCH is a `midi_note` and DETUNE is a bipolar `cents` knob.
 
-**There is deliberately no filter and no dry/wet mix.** The audio input is ignored and the output is always wet, so CUTOFF/RESON/MIX are not just unused — the slots went to `LFO RATE`, `LFO DEPTH` and `PATTERN`, which are wavetable-specific controls a filter unit cannot provide.
+**There is deliberately no filter and no dry/wet crossfade.** The output is `in + wet`, never a crossfade, so the unit layers under whatever the pad is already playing; CUTOFF/RESON are not just unused — the slots went to `LFO RATE`, `LFO DEPTH` and `PATTERN`, which are wavetable-specific controls a filter unit cannot provide.
 
 Pad/knob defaults in `header.c`: `X → POSITION (0..1023, 512)`, `Y → LFO DEPTH (0..1023, 0)`, `DEPTH → PATTERN (0..1023, 0)`, everything else `k_genericfx_param_assign_none` with the descriptor range (encoders only). Optional build switch `-DWTPAD_PITCH` swaps the X/Y pair to `X → PITCH`, `Y → POSITION` for a playable theremin-style unit.
 
@@ -182,7 +182,8 @@ Also required in the `Makefile`:
 - **Drone** — `ADSR >= 820` bypasses the whole envelope: `amp_ = 1` every sample, sustain forced to 1, touch and PATTERN ignored entirely (a drone is already sounding, so there is nothing for a gate to do). It keeps oscillating until the parameters change. This is why the morph was capped at `820` instead of `1023`: the tail of the knob is a mode, not a sixth envelope shape.
 - **Generative 16-step pattern** — ported from the acid unit so both units generate lines that feel like siblings. `PATTERN` is a seed, not a density: `regenPattern()` mixes an LCG with the minor pentatonic scale `{0, 2, 3, 5, 7, 8, 10, 12}`, biased to root (50 %) and fifth (25 %), adds ~44 % accents and ~25 % legato slides, and picks its own Euclidean hit density of 5–12 of 16. Step 0 is forced to be the root, accented and unslid, so the bar has a downbeat. Changing PATTERN while touched regenerates, rewinds to step 0 and triggers immediately, so the new pattern is heard at once; with the pad released the change waits for the next touch.
 - **Host clock** — `setTempo` sets `samples_per_step_` for one 16th note, and `tempo4ppqnTick` records the host counter. **While the host is sending 4PPQN the two are exclusive** (`if (host_sync_valid_) … else …`): the unit follows `host_counter_ & 15` and runs no second clock. This is a real bug that was measured, not a theoretical one — advancing on both triggers every step twice a few samples apart, and the second trigger cuts the first note short. The internal clock is only used when no valid host tick has ever arrived, which is what makes the WASM/browser and offline renders keep time.
-- **Output** — unison pair panned per DETUNE plus sub, scaled by `amp_ * step_accent_ * 0.5` (accents are `1.0` vs `0.55`), then `fx_softclipf(0.15, …)` per channel. No mixer and no filter stage: the pad input is never read.
+- **Output** — unison pair panned per DETUNE plus sub, scaled by `amp_ * step_accent_ * 0.5` (accents are `1.0` vs `0.55`), then `fx_softclipf(0.15, …)` per channel, then **added to the input**: `out = in + softclip(wet)`, both channels, exactly the acid unit's `write_out` default path. The soft clip is applied to the wet signal *before* the sum so the dry path stays a clean passthrough, and the `in` pointer is advanced with `out` in the sample loop so each output sample gets its own input sample.
+  Two consequences worth stating: an idle unit is a **bit-exact passthrough** (measured deviation 0.0), and the wet never sees the input, so nothing in this unit can ring or self-oscillate off the pad's own signal.
 - **Loader safety** — no stdio, no heap, no `snprintf`; `getBufferSize() == 0` and `unit_init` only requires the `sdram_alloc` hook if a buffer is actually wanted (the table is `const` rodata), so the table never competes with the 3 MB external budget. The DSP leans on the SDK's fast approximations (`fasterexpf`, `fastlog2f`, `fastercosfullf`, `fastersinfullf`, `linintf`, `clipminmaxf`) rather than libm, so the only firmware tables it needs are `wt_sine_lut_f`, `wt_sqr_lut_f`, `midi_to_hz_lut_f`, `pow2_lut_f`. Those four are the linked unit's *entire* `UND` list — the same set as the `acid` reference unit. (`-lm` stays in `config.mk` from acid; nothing in this unit needs it any more now that the ladder filter's `tanhf` is gone.)
 
 
@@ -198,7 +199,7 @@ Also required in the `Makefile`:
 | `config.mk` | `PROJECT := wavetable`, `UCSRC = header.c`, `UCXXSRC = unit.cc wt_osc.cpp`, `ULIBS = -lm`. |
 | `header.c` | Unit descriptor: `dev_id = 0x735A585A` ('sZXZ', the vendor ID shared with the other units in this fork), `unit_id = WT_UNIT_ID`, name `WT_DISPLAY_NAME`, 8 descriptors, default mappings. Includes `"wt_data.h"`. |
 | `unit.cc` | Runtime callbacks (acid's file, same pattern: validation in `unit_init`, `cached_values[]` getters, no `<climits>` guards). `setTempo` and `tempo4ppqnTick` forward the host transport to the DSP. The `sdram_alloc` hook is only required when `getBufferSize() > 0`, which for this unit never is. |
-| `wt_osc.h` / `wt_osc.cpp` | `Processor` implementation: mip selection and table read, LFO, unison, sub, ADSR morph + drone, the generative sequencer and its host/internal clock, softclip output. |
+| `wt_osc.h` / `wt_osc.cpp` | `Processor` implementation: mip selection and table read, LFO, unison, sub, ADSR morph + drone, the generative sequencer and its host/internal clock, softclip, additive mix with the input. |
 | `tools/wav2table.py` | The baker (§2). |
 | `wt/*.wav` | Wavetable sources; one variant per file. |
 | `wasm.cc` | Shared genericfx WebAssembly wrapper (unmodified by this redesign): it enumerates `unit_header.common.params[]` at runtime, so the browser harness picks up the new eight parameters and the removed ones automatically. Only the generated `wt_data.c/h` is swapped per variant. |
@@ -216,9 +217,9 @@ Also required in the `Makefile`:
 
 #### Measured on the current build
 
-`arm-none-eabi-size build/<v>/<v>.elf`: `text 16865, data 364, bss 200` = **17429 B**, packaged as an 18488 B `<v>.nts3unit` — identical for all three variants, since only the table's contents differ. (The `data`/`text` split is what the loader actually cares about: `text` is the resident code + rodata that holds the 8176 B table, and it is the same size for all three because the array is the same length.)
+`arm-none-eabi-size build/<v>/<v>.elf`: `text 16889, data 364, bss 200` = **17453 B**, packaged as an 18512 B `<v>.nts3unit` — identical for all three variants, since only the table's contents differ. (The `data`/`text` split is what the loader actually cares about: `text` is the resident code + rodata that holds the 8176 B table, and it is the same size for all three because the array is the same length.)
 
-The DSP is verified by a host harness that renders the **compiled** `wt_osc.cpp` against the real baked table and firmware LUT stubs, then FFTs / autocorrelates the result (`/var/folders/.../opencode/wt_test`, throwaway). It is a behavioural suite, not a golden-file comparison: it asserts relationships (partials are harmonics, timings are close, the played pattern is the generated pattern), so it survives DSP tuning. **220 checks, all passing, for each of `bass`, `cr_ch` and `evolve`.**
+The DSP is verified by a host harness that renders the **compiled** `wt_osc.cpp` against the real baked table and firmware LUT stubs, then FFTs / autocorrelates the result (`/var/folders/.../opencode/wt_test`, throwaway). It is a behavioural suite, not a golden-file comparison: it asserts relationships (partials are harmonics, timings are close, the played pattern is the generated pattern), so it survives DSP tuning. **228 checks, all passing, for each of `bass`, `cr_ch` and `evolve`.**
 
 | Check | Result |
 | :--- | :--- |
@@ -230,6 +231,7 @@ The DSP is verified by a host harness that renders the **compiled** `wt_osc.cpp`
 | LFO | on the `cr_ch` wav (deliberately the sweep-heaviest of the three, so the test has the most to see) the 3–9 kHz fraction swings **0.041 → 0.359** over one cycle at both 1.00 Hz and 0.22 Hz, while `f0` stays at 2347.9/2348.8 Hz — timbre, not pitch. Per variant the swing is `bass` 0.020, `cr_ch` 0.317, `evolve` 0.295; `bass` is small for the reason in the note below, and its `f0` still does not move (586.7/586.9) |
 | PATTERN | generated hits `[0,2,4,6,8,10,11,12,13,14,15]` are played **exactly**, no extra step triggers, every heard note is the note the generator chose, step 0 is the root, accent ratio 1.71 (design 1.00/0.55 = 1.82) |
 | Host sync | 4PPQN-synced and free-running renders agree on onset time to **0.0 ms**, worst 16th-grid error **2.5 ms**; both trigger repeatedly, stop on release, and the drone does not |
+| Input mixing | `out - in` recovered from a render fed a stereo sine matches an otherwise identical silent-input render to **3e-8** (float32 rounding) — i.e. exactly `out = in + wet`; with the unit idle the output is **bit-exact** the input; a drone over a DC input keeps the input's 0.25 and adds its own 0.42 rms beside it |
 
 **On POSITION and these particular wavs.** The mechanism is correct and general — proven on a synthetic saw source, where the pyramid is a clean one-octave-per-level tilt (h8/h1 0.125 → 0.119 → 0.112 → 0.000). But the shipped wavs are each harmonic-poor in a different way, so how far POSITION can actually travel depends on the sample:
 
@@ -239,3 +241,41 @@ The DSP is verified by a host harness that renders the **compiled** `wt_osc.cpp`
 
 **On the fundamental.** The pitch tests deliberately look for h1 in the *full* peak list (floor −29 dB) rather than the strong-peak subset (−15 dB), because `cr_ch` keeps its fundamental 25 dB down. Selecting h1 only among strong peaks reports a missing fundamental for that wav even though it is plainly there — a property of the source, not a defect in the unit.
 
+
+---
+
+### 7. Relationship to the acid unit (signal-chain deviations)
+
+The acid unit is the sibling this one was ported from, so the differences are worth writing down rather than discovering by ear. Everything below was read off the two sources; nothing is inferred. The **input/output stage is now identical to acid's default variant**: dry passes both channels at unity, the wet is soft-clipped at 0.15 and then added, with the same 0.5 VCA trim.
+
+#### Same as acid
+
+- Input/output stage: `out = in + fx_softclipf(0.15, wet * 0.5)`, both channels (`write_out`'s default path). The `_L`/`_R` build variants are the only difference here, see below.
+- Sequencer skeleton: 16 steps of 16ths at host tempo, seeded by `PATTERN` with the same LCG (`0x7F4A7C15 + (seed+1)*0x9E3779B9`), the same minor pentatonic `{0,2,3,5,7,8,10,12}`, the same root/fifth bias, the same ~44 % accents and ~25 % legato slides, step 0 forced to the root, slides gliding without a re-attack, and a retrigger that resumes the attack from the current level so a fast line never clicks. **The same PATTERN seed yields the same 16 notes in both units.**
+- Audio only while the pad is touched; the clock keeps running; legato slides and accent-weighted retriggers behave identically.
+- Same vendor `dev_id` (`0x735A585A`, 'sZXZ').
+
+#### Deviations, in signal-flow order
+
+| # | Stage | Acid | Wavetable unit |
+| :--- | :--- | :--- | :--- |
+| 1 | Output routing | `_L` / `_R` build variants put the voice on one channel only (ids `0x12`/`0x22`/`0x32`/`0x42`), so two copies can be chained as separate instruments | no such variant; the voice always goes to both channels |
+| 2 | Oscillators | one band-limited oscillator, saw↔square crossfade by `WAVE` | two (unison), one per channel, ±`DETUNE`/2 cents, equal-power pan |
+| 3 | Waveform source | synthesised: `osc_bl2_sawf` / `osc_bl2_sqrf`, band-limited by harmonic count | baked: `int16` mip-mapped cycle, 4-point Catmull-Rom, band-limited by picking a mip level from pitch and POSITION |
+| 4 | Top of the range | just stops adding harmonics | explicit crossover to the firmware band-limited sine above 5512.5 Hz |
+| 5 | Filter | 4-stage Moog ladder, tanh-saturated, resonance feedback to ~3.5, cutoff `30 Hz * exp(6.215*cutoff)` swept up by the envelope (`+4000*(0.2+1.2*ACID)` Hz) | **none** — no filter state, no resonance, no cutoff, no tanh harmonics |
+| 6 | Pad axes | X → CUTOFF, Y → RESON | X → POSITION, Y → LFO DEPTH |
+| 7 | Envelope | fixed 1.2 ms attack, decay 10–2000 ms from `DECAY`, release 35→12.5 ms scaled by `ACID`, **no sustain level** (decay always reaches zero) | the arpeggiator's 5-preset morph: attack 1–400 ms, decay 60–400 ms, **sustain 0–0.9**, release 15 ms–1.2 s; defaults to Pad rather than something short and percussive |
+| 8 | Envelope destination | drives the VCA **and** the filter cutoff | drives the VCA only — there is no filter to sweep |
+| 9 | Release curve | constant decrement, so the release time depends on the level it starts from | linear scaled by the level captured at release, so it is time-correct from any level |
+| 10 | Drone | none | `ADSR >= 820` bypasses the envelope entirely, holds full sustain and sounds with no touch |
+| 11 | Accent meaning | `accent ? 1.0 : 0.0` — an un-accented step is **silent**, and the accent also brightens the filter via `acc_boost` | `accent ? 1.0 : 0.55` — every hit sounds, accents are 1.8× louder, with no brightness coupling |
+| 12 | Modulators | none at all | free-running LFO, 0.05–20 Hz, sweeping POSITION by ±depth |
+| 13 | Sub | none; the low end comes from the filter | band-limited square one octave down at `SUB` level, summed into both channels |
+| 14 | Density | user parameter `DENSITY`, 1–16 Euclidean pulses (default 12) | no control; the seed derives 5–12 pulses, so turning PATTERN changes the rhythm as well as the notes |
+| 15 | Pattern change | only sets a dirty flag; picked up lazily, no rewind, no immediate trigger | while touched: regenerate, rewind to step 0, clear the clock and trigger immediately |
+| 16 | Sequencer off | impossible — the unit always sequences | `PATTERN = 0` is a mode: no sequencer, the pad plays the root note |
+| 17 | Pattern drift | `-DAUTODRIFT` mutates a few steps once per bar so the line drifts | no drift; a seed is a fixed 16-step loop |
+| 18 | Clock | the host snap and the free-running clock are two independent `if`s, so if the two grids ever drift the same step can be triggered twice a few samples apart and the second trigger cuts the note short | mutually exclusive `if`/`else`, so it cannot double-trigger; host and free-running renders agree to 0.0 ms. **The acid unit still carries the looser version** |
+| 19 | Parameters | `WAVE ROOT PATTERN DENSITY CUTOFF RESON DECAY ACID` | `PITCH POSITION LFO RATE LFO DEPTH ADSR PATTERN SUB DETUNE` — only `PATTERN` shares a name, and `ROOT` is `PITCH` |
+| 20 | Identity | fixed ids `0x02`/`0x12`/`0x22`/`0x32`/`0x42` | one id per wav, `(FNV-1a(stem) & 0x1FF) \| 0x100` → `0x100`–`0x1FF` (bass `0x017A`, cr_ch `0x0106`, evolve `0x01D0`), keeping `0x00`–`0xFF` free for the fork's other units so both can be installed together |

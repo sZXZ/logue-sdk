@@ -4,11 +4,14 @@
  *
  *  NTS-3 kaoss pad kit "WT" wavetable oscillator unit
  *
- *  A pure sound generator: the audio input is ignored (out = wet). The
- *  wavetable itself is baked at build time by tools/wav2table.py, which folds
- *  a wav from wt/ into a single mip-mapped int16 cycle; the Makefile generates
- *  one build variant (and one .nts3unit) per wav, so this source is compiled
- *  against whichever wt_data.h that variant was given.
+ *  A wavetable voice that layers under the pad: the audio input passes through
+ *  untouched on both channels and the generated signal is mixed on top of it,
+ *  the same additive pass-through the acid unit uses (no dry/wet crossfade, no
+ *  level trim -- the soft clip is applied to the wet signal before it is
+ *  added). The wavetable itself is baked at build time by tools/wav2table.py,
+ *  which folds a wav from wt/ into a single mip-mapped int16 cycle; the
+ *  Makefile generates one build variant (and one .nts3unit) per wav, so this
+ *  source is compiled against whichever wt_data.h that variant was given.
  *
  *    - Band-limited wavetable playback: POSITION crossfades neighbouring mip
  *      levels. Every level is band limited at its own rate by the baker, so
@@ -23,9 +26,10 @@
  *    - Optional generative 16 step pattern (PATTERN seed, tempo synced to the
  *      host 4PPQN clock) played under the touch, like the acid unit
  *
- *  There is deliberately no filter and no dry/wet mix: on the kaoss those are
- *  another unit's job, and CUTOFF/RESON/MIX are better spent on wavetable
- *  specific controls.
+ *  There is deliberately no filter and no dry/wet crossfade: on the kaoss
+ *  those are another unit's job, and CUTOFF/RESON/MIX are better spent on
+ *  wavetable specific controls. Mixing itself is the acid unit's additive
+ *  pass-through, so this unit layers with the input instead of replacing it.
  */
 #include "processor.h"
 #include "unit_genericfx.h"
