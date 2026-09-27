@@ -44,3 +44,7 @@
  | 0x4d72474a ('MrGJ') | [Glenn Jones](https://github.com/mrglennjones) |
  | 0x72677276 ('rgrv') | [Gerard Braad](https://music.gbraad.nl/logue/) |
  | 0x4541524C ('EARL') | [Earl of FX](https://github.com/earlofFX) |
+ | 0x73726373 ('srcs') | [alternate sources](https://github.com/alternatesources) |
+ | 0x4D616A69 ('Maji') | [Daniel Majid](https://github.com/DanielMajid) |
+ | 0x6a736f6e ('json') | [Jason Moore](https://github.com/casconed) |
+ | 0x735A585A ('sZXZ') | [sZXZ](https://github.com/sZXZ) |
