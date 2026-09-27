@@ -69,3 +69,5 @@ tools/gcc/gcc-arm-none-eabi-*
 **/.DS_Store
 platform/nts-3_kaoss/examples
 *.code-workspace
+*.wav
+*.pyc
