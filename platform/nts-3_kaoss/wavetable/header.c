@@ -5,11 +5,51 @@
  *
  *  The unit name and id come from the baked wavetable (wt_data.h is generated
  *  per wav by tools/wav2table.py, and the Makefile builds one variant per wav
- *  in wt/), so every wav in the folder ends up as its own .nts3unit.
+ *  in wt/ and per build option combination), so every wav in the folder ends up
+ *  as six .nts3unit files.
  */
 
 #include "unit_genericfx.h" // Note: Include base definitions for genericfx units
-#include "wt_data.h"         // Generated: WT_DISPLAY_NAME, WT_UNIT_ID
+#include "wt_data.h"         // Generated: WT_DISPLAY_NAME, WT_NAME_BASE, WT_UNIT_ID
+
+// ---- Variant selection (see Makefile) ---------------------------------------------
+// The wavetable part of the identity is baked (WT_UNIT_ID / WT_DISPLAY_NAME,
+// one per wav in wt/); the build option axes are layered on top, so the six
+// variants of one wav share the wav's id bits and stay in the same range:
+//   AUTODRIFT     the 16 step line mutates once per bar instead of looping
+//   UNIT_OUT_*    the voice is added to a single output channel only
+#if defined(UNIT_OUT_LEFT) && defined(UNIT_OUT_RIGHT)
+#error "UNIT_OUT_LEFT and UNIT_OUT_RIGHT are mutually exclusive"
+#endif
+
+#if defined(AUTODRIFT) && defined(UNIT_OUT_LEFT)
+#define WT_VARIANT_ID 0x0600U
+#define WT_VARIANT_SUFFIX " Evo L"
+#elif defined(AUTODRIFT) && defined(UNIT_OUT_RIGHT)
+#define WT_VARIANT_ID 0x0A00U
+#define WT_VARIANT_SUFFIX " Evo R"
+#elif defined(AUTODRIFT)
+#define WT_VARIANT_ID 0x0200U
+#define WT_VARIANT_SUFFIX " Evo"
+#elif defined(UNIT_OUT_LEFT)
+#define WT_VARIANT_ID 0x0400U
+#define WT_VARIANT_SUFFIX " L"
+#elif defined(UNIT_OUT_RIGHT)
+#define WT_VARIANT_ID 0x0800U
+#define WT_VARIANT_SUFFIX " R"
+#else
+#define WT_VARIANT_ID 0x0000U
+#define WT_VARIANT_NAME WT_DISPLAY_NAME
+#endif
+
+#ifdef WT_VARIANT_SUFFIX
+// The baker emits a shorter stem for the variants so the suffix always fits in
+// the 19 character name field; the static assert turns a future longer stem into
+// a build error instead of a truncated name on the device.
+#define WT_VARIANT_NAME WT_NAME_BASE WT_VARIANT_SUFFIX
+_Static_assert(sizeof(WT_VARIANT_NAME) <= UNIT_NAME_SIZE,
+               "wav name + variant suffix does not fit UNIT_NAME_LEN");
+#endif
 
 // ---- Unit header definition  --------------------------------------------------------------------
 
@@ -19,9 +59,9 @@ const __unit_header genericfx_unit_header_t unit_header = {
     .target = UNIT_TARGET_PLATFORM | k_unit_module_genericfx, // Target platform and module pair for this unit
     .api = UNIT_API_VERSION,                                 // API version for which unit was built. See runtime.h
     .dev_id = 0x735A585A,
-    .unit_id = WT_UNIT_ID,                                   // Scoped within dev_id, one per wav
+    .unit_id = WT_UNIT_ID | WT_VARIANT_ID,                    // Scoped within dev_id, one per wav + variant
     .version = 0x00010000U,
-    .name = WT_DISPLAY_NAME,                                 // Name shown on device, e.g. "WT BASS"
+    .name = WT_VARIANT_NAME,                                 // Name shown on device, e.g. "WT BASS Evo L"
     .num_params = 8,                                         // Number of valid parameter descriptors. (max. 8)
 
     .params = {

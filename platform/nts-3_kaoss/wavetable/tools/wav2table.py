@@ -418,6 +418,9 @@ def render_h(src, stem, base, level_count, total, rate, f0):
             "",
             '#define WT_NAME_STR     "%s"' % sanitize(stem, 21),
             '#define WT_DISPLAY_NAME "WT %s"' % sanitize(stem, 16),
+            # Shorter stem for the build option variants: header.c appends
+            # " Evo L" etc, and the name field holds 19 characters.
+            '#define WT_NAME_BASE    "WT %s"' % sanitize(stem, 10),
             "#define WT_UNIT_ID      0x%04XU" % unit_id(stem),
             "#define WT_F0_HZ        %.3ff" % f0,
             "#define WT_RATE         %.1ff" % float(rate),

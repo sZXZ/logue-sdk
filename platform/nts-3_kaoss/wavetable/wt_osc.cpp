@@ -8,6 +8,35 @@
 #include "fx_api.h"
 #include "osc_api.h"
 
+namespace
+{
+#if defined(UNIT_OUT_LEFT) && defined(UNIT_OUT_RIGHT)
+#error "UNIT_OUT_LEFT and UNIT_OUT_RIGHT are mutually exclusive"
+#endif
+
+// Write one sample pair. The dry input always passes on both channels; the
+// generated voice is soft clipped and then added, the same convention as the
+// acid unit, so this is additive layering rather than a crossfade. The "_L" /
+// "_R" build variants (see the Makefile) add it to a single side, and the
+// other side is a clean passthrough, so two copies of the unit can be chained
+// and treated as separate instruments.
+static inline void write_out(const float *in, float *out, float sig_l, float sig_r)
+{
+#if defined(UNIT_OUT_LEFT)
+  (void)sig_r;
+  out[0] = in[0] + fx_softclipf(0.15f, sig_l);
+  out[1] = in[1];
+#elif defined(UNIT_OUT_RIGHT)
+  (void)sig_l;
+  out[0] = in[0];
+  out[1] = in[1] + fx_softclipf(0.15f, sig_r);
+#else
+  out[0] = in[0] + fx_softclipf(0.15f, sig_l);
+  out[1] = in[1] + fx_softclipf(0.15f, sig_r);
+#endif
+}
+} // namespace
+
 void WavetableOsc::init(float *allocated_buffer)
 {
   buffer_ = allocated_buffer;
@@ -32,6 +61,9 @@ void WavetableOsc::reset()
   host_counter_ = 0;
   host_sync_valid_ = false;
   pattern_dirty_ = true;
+#ifdef AUTODRIFT
+  drift_state_ = 0x9E3779B9u ^ (uint32_t)(params_.pattern + 1) * 0x85EBCA6Bu;
+#endif
   for (uint8_t i = 0; i < k_num_steps; ++i)
   {
     pitch_[i] = 0;
@@ -87,7 +119,56 @@ void WavetableOsc::regenPattern()
   accent_[0] = 1;
   slide_[0] = 0;
   hit_[0] = 1;
+
+#ifdef AUTODRIFT
+  // Reseed the mutation RNG with the seed, so the drift is reproducible for a
+  // given PATTERN and a fresh seed does not inherit the old line's history.
+  drift_state_ = 0x9E3779B9u ^ (uint32_t)(params_.pattern + 1) * 0x85EBCA6Bu;
+#endif
 }
+
+#ifdef AUTODRIFT
+// Evolving pattern (-DAUTODRIFT, the "_evo" variants): once per bar, softly
+// mutate a few steps so the line drifts over time instead of looping forever.
+// Ported from the acid unit, which mutates pitch and accent the same way; the
+// Euclidean hit pattern is left alone so the rhythm of the bar keeps its shape.
+void WavetableOsc::driftPattern()
+{
+  const int8_t *sc = scale();
+  drift_state_ = drift_state_ * 1664525u + 1013904223u;
+  const uint32_t r0 = drift_state_ >> 16;
+  const uint8_t mutations = 1u + (uint8_t)(r0 & 3u);
+
+  for (uint8_t m = 0; m < mutations; ++m)
+  {
+    drift_state_ = drift_state_ * 1664525u + 1013904223u;
+    const uint32_t r1 = drift_state_ >> 16;
+    const uint8_t i = (uint8_t)(r1 & 0x0Fu); // step 0..15
+
+    drift_state_ = drift_state_ * 1664525u + 1013904223u;
+    const uint32_t r2 = drift_state_ >> 16;
+
+    switch (r2 & 3u)
+    {
+    case 0:
+    case 1:
+      // Move toward the root or fifth.
+      pitch_[i] = (r2 & 8u) ? sc[4] : 0;
+      break;
+    case 2:
+      accent_[i] ^= 1;
+      break;
+    default:
+      pitch_[i] = sc[1 + (r2 >> 8) % 7];
+      break;
+    }
+  }
+  // Beat one always lands on the root + accent for a solid bar reset.
+  pitch_[0] = 0;
+  accent_[0] = 1;
+  slide_[0] = 0;
+}
+#endif
 
 void WavetableOsc::setParameter(uint8_t index, int32_t value)
 {
@@ -314,6 +395,12 @@ void WavetableOsc::process(const float *__restrict in, float *__restrict out, ui
           {
             step_ = host_step;
             clock_accum_ = 0.f;
+#ifdef AUTODRIFT
+            // Drift on the bar line, before the step is triggered, so the
+            // downbeat comes from the mutated pattern.
+            if (step_ == 0)
+              driftPattern();
+#endif
             triggerStep();
           }
         }
@@ -321,6 +408,10 @@ void WavetableOsc::process(const float *__restrict in, float *__restrict out, ui
         {
           clock_accum_ -= samples_per_step_;
           step_ = (uint8_t)((step_ + 1) & k_step_mask);
+#ifdef AUTODRIFT
+          if (step_ == 0)
+            driftPattern();
+#endif
           triggerStep();
         }
       }
@@ -429,8 +520,8 @@ void WavetableOsc::process(const float *__restrict in, float *__restrict out, ui
     // mixed on top of it. The wet signal is soft clipped *before* it is added,
     // so the dry path stays a clean passthrough and this is additive layering,
     // not a crossfade -- the unit sits under whatever the pad is already
-    // playing instead of replacing it.
-    out[0] = in[0] + fx_softclipf(0.15f, sig_l);
-    out[1] = in[1] + fx_softclipf(0.15f, sig_r);
+    // playing instead of replacing it. The "_L" / "_R" build variants add the
+    // voice to one channel only; see write_out above.
+    write_out(in, out, sig_l, sig_r);
   }
 }

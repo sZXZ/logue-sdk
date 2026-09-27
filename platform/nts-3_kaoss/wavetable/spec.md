@@ -1,6 +1,6 @@
 ### NTS-3 kaoss pad "WT" — Wavetable Oscillator Unit
 
-A single-cycle **wavetable oscillator** for the NTS-3 kaoss pad, built as a `genericfx` unit. It **mixes with** the audio input rather than replacing it: the input passes through on both channels at unity and the generated wavetable voice is added on top, the same additive pass-through the acid unit uses. Its distinguishing feature is the **build-time wavetable baker**: every `.wav` dropped into `wt/` is folded down to a single cycle, mip-mapped, quantized to `int16` and emitted as a generated C source. Each wav becomes **one build variant** (its own `.nts3unit`), so a folder of samples turns into a folder of units from a single `make`.
+A single-cycle **wavetable oscillator** for the NTS-3 kaoss pad, built as a `genericfx` unit. It **mixes with** the audio input rather than replacing it: the input passes through on both channels at unity and the generated wavetable voice is added on top, the same additive pass-through the acid unit uses. Its distinguishing feature is the **build-time wavetable baker**: every `.wav` dropped into `wt/` is folded down to a single cycle, mip-mapped, quantized to `int16` and emitted as a generated C source. Each wav is then built as the acid unit's **six build-option variants** (`plain` / `_evo` / `_L` / `_R` / `_evo_L` / `_evo_R`), so a folder of samples turns into six folders of units from a single `make`.
 
 ---
 
@@ -21,7 +21,7 @@ Descriptor rows use `{min, max, center, init, type, frac, frac_mode, reserved, {
 
 **There is deliberately no filter and no dry/wet crossfade.** The output is `in + wet`, never a crossfade, so the unit layers under whatever the pad is already playing; CUTOFF/RESON are not just unused — the slots went to `LFO RATE`, `LFO DEPTH` and `PATTERN`, which are wavetable-specific controls a filter unit cannot provide.
 
-Pad/knob defaults in `header.c`: `X → POSITION (0..1023, 512)`, `Y → LFO DEPTH (0..1023, 0)`, `DEPTH → PATTERN (0..1023, 0)`, everything else `k_genericfx_param_assign_none` with the descriptor range (encoders only). Optional build switch `-DWTPAD_PITCH` swaps the X/Y pair to `X → PITCH`, `Y → POSITION` for a playable theremin-style unit.
+Pad/knob defaults in `header.c`: `X → POSITION (0..1023, 512)`, `Y → LFO DEPTH (0..1023, 0)`, `DEPTH → PATTERN (0..1023, 0)`, everything else `k_genericfx_param_assign_none` with the descriptor range (encoders only). Optional build switch `-DWTPAD_PITCH` swaps the X/Y pair to `X → PITCH`, `Y → POSITION` for a playable theremin-style unit. It is orthogonal to the variant axes: `make WTPAD_PITCH=1` adds it to every variant (and to the wasm sandbox) rather than making a seventh axis, so it needs a `WT_EXTRA_DEFINES` of its own — the variant rules pass `UDEFS=` on the sub-make command line, which shadows a `UDEFS=` given on the outer `make`.
 
 
 ---
@@ -68,7 +68,9 @@ Flags: `--base N` (default 2048, may be raised to 4096 for f0 < 15 Hz at 2× the
 #include <stdint.h>
 
 #define WT_NAME_STR     "BASS"    /* sanitized stem, uppercased        */
-#define WT_DISPLAY_NAME "WT BASS"  /* what the unit shows on the kaoss   */
+#define WT_DISPLAY_NAME "WT BASS"  /* what the plain unit shows         */
+#define WT_NAME_BASE    "WT BASS"  /* shorter stem, for the _evo/_L/_R  */
+                                   /* variants, so the suffix fits      */
 #define WT_UNIT_ID      0x017AU   /* FNV-1a 32 of the stem, & 0x1FF,   */
                                    /* | 0x100 -> always 0x100..0x1FF   */
 #define WT_F0_HZ        21.771f   /* baked fundamental                  */
@@ -82,7 +84,7 @@ extern const int16_t wt_table[WT_TOTAL];                 /* all levels, base fir
 extern const uint16_t wt_level_offset[WT_LEVEL_COUNT + 1]; /* index ranges per level  */
 ```
 
-`unit_id` is a hash of the stem, not a hand-assigned constant, so adding a wav to `wt/` needs no ID bookkeeping. Bit 8 is forced on, which pins every wavetable unit to `0x100`–`0x1FF` — deliberately above the `0x00`–`0xFF` block the fork's other `sZXZ` units occupy (`0x01` noise-generator, `0x02` acid/arpeggiator, `0x03` evolving_arp, `0x10` granular, and the `0x1X`/`0x2X`/`0x3X`/`0x4X`/`0x5X` acid + drums feature bits), so the shared vendor namespace cannot collide with them.
+`unit_id` is a hash of the stem, not a hand-assigned constant, so adding a wav to `wt/` needs no ID bookkeeping. Bit 8 is forced on, which pins every wavetable unit to `0x100`–`0x1FF` — deliberately above the `0x00`–`0xFF` block the fork's other `sZXZ` units occupy (`0x01` noise-generator, `0x02` acid/arpeggiator, `0x03` evolving_arp, `0x10` granular, and the `0x1X`/`0x2X`/`0x3X`/`0x4X`/`0x5X` acid + drums feature bits), so the shared vendor namespace cannot collide with them. The build option axes layer on top of those nine hash bits (`header.c`): `| 0x200` evo, `| 0x400` left, `| 0x800` right, so the six variants of one wav are `0x1XX`–`0xBXX` and still never reach `0x00`–`0xFF`.
 
 `wt_table.c` is a plain `const int16_t` array → lands in `.rodata` inside the `text` PT_LOAD segment. Symbols are *not* per-variant (only one generated source is ever linked per variant), which is why each variant gets its own `-I` directory instead of macro token pasting.
 
@@ -90,7 +92,7 @@ extern const uint16_t wt_level_offset[WT_LEVEL_COUNT + 1]; /* index ranges per l
 
 ### 3. Makefile variant scheme
 
-Mirrors the `acid` variant pattern (recursive sub-make carrying `UDEFS`, one `build/<variant>/` object dir each), extended with wavetable discovery. The `foreach`/`eval` pair is the part that turns a wildcard into per-variant variables — verified end-to-end with two wavs before writing this spec.
+Mirrors the `acid` variant pattern (recursive sub-make carrying `UDEFS`, one `build/<variant>/` object dir each), extended with wavetable discovery: the acid set of build options is crossed with the wav list, so every wav in `wt/` builds as six units. The `foreach`/`eval` pairs are the part that turns a wildcard × axis list into per-variant variables.
 
 ```make
 WTDIR   := $(PROJDIR)/wt
@@ -103,21 +105,44 @@ ifeq ($(strip $(WTSRCS)),)
 $(error no wav files in $(WTDIR) -- nothing to build)
 endif
 
-# One variant per wav file: the stem is the variant name and -DWT_NAME
-VARIANTS := $(WTSTEMS)
+# Build option axes; `plain` keeps the bare stem as the variant name.
+WT_AXES := plain evo L R evo_L evo_R
+
+WT_AXIS_suffix_plain :=
+WT_AXIS_suffix_evo   := _evo
+...
+WT_AXIS_defines_plain :=
+WT_AXIS_defines_evo   := -DAUTODRIFT
+WT_AXIS_defines_L     := -DUNIT_OUT_LEFT
+WT_AXIS_defines_R     := -DUNIT_OUT_RIGHT
+WT_AXIS_defines_evo_L := -DAUTODRIFT -DUNIT_OUT_LEFT
+WT_AXIS_defines_evo_R := -DAUTODRIFT -DUNIT_OUT_RIGHT
+
+# WTPAD_PITCH is orthogonal: `make WTPAD_PITCH=1` adds it to every variant.
+ifdef WTPAD_PITCH
+WT_EXTRA_DEFINES := -DWTPAD_PITCH
+else
+WT_EXTRA_DEFINES :=
+endif
+
+# One variant per (wav, axis) pair, so VARIANTS is bass, bass_evo, bass_L, ...
+WT_NAMES := $(foreach v,$(WTSTEMS),$(foreach a,$(WT_AXES),$(v)$(WT_AXIS_suffix_$(a))))
+VARIANTS := $(WT_NAMES)
 
 define WT_VARIANT
-variant_$(1)_defines := -DWT_NAME=$(1)
-variant_$(1)_srcs := $(GENDIR)/$(1)/wt_data.c
-variant_$(1)_hdrs := $(GENDIR)/$(1)/wt_data.h
-variant_$(1)_incs := $(GENDIR)/$(1)
+variant_$(1)_defines := -DWT_NAME=$(2) $$(WT_AXIS_defines_$(3)) $$(WT_EXTRA_DEFINES)
+variant_$(1)_srcs := $(GENDIR)/$(2)/wt_data.c
+variant_$(1)_hdrs := $(GENDIR)/$(2)/wt_data.h
+variant_$(1)_incs := $(GENDIR)/$(2)
 endef
-$(foreach v,$(WTSTEMS),$(eval $(call WT_VARIANT,$(v))))
+$(foreach v,$(WTSTEMS),$(foreach a,$(WT_AXES),$(eval $(call WT_VARIANT,$(v)$(WT_AXIS_suffix_$(a)),$(v),$(a)))))
 
 GEN := $(patsubst $(WTDIR)/%.wav,$(GENDIR)/%/wt_data.c,$(WTSRCS))
 ```
 
-`all` bakes first, then builds one unit per wav; the sub-make gets the generated source, header and include dir (command-line `UCSRC`/`UINCDIR`/`UHDR` override `config.mk`):
+The axes are independent, so the cross product is the full `evo × left × right` lattice with `plain` as its origin. Splitting suffix and defines into two variables per axis is what keeps the `plain` variant named after the bare wav (`bass.nts3unit`, not `bass_plain.nts3unit`) while every pair still gets one `eval`'d rule; the `$$(WT_AXIS_defines_$(3))` reference is deferred (`$$`) so the axis table above applies to every stem.
+
+`all` bakes first, then builds one unit per (wav, axis); the sub-make gets the generated source, header and include dir (command-line `UCSRC`/`UINCDIR`/`UHDR` override `config.mk`):
 
 ```make
 all: PRE_ALL $(GEN) $(addprefix $(PROJDIR)/, $(addsuffix .nts3unit, $(VARIANTS))) POST_ALL
@@ -128,12 +153,12 @@ $(GENDIR)/%/wt_data.c: $(WTDIR)/%.wav $(BAKER)
 	@python3 $(BAKER) $< $@ --name $*
 
 # One explicit rule per variant (see below), not a pattern rule
-$(PROJDIR)/bass.nts3unit: $(UCSRC) $(UCXXSRC) $(variant_bass_srcs) $(variant_bass_hdrs) \
-                          $(UHDR) $(HDRS) Makefile config.mk
-	@echo "=== Building variant bass ==="
-	$(MAKE) --no-print-directory PROJECT=bass UDEFS="$(variant_bass_defines)" \
-		UCSRC="$(UCSRC) $(variant_bass_srcs)" UINCDIR="$(UINCDIR) $(variant_bass_incs)" \
-		UHDR="$(UHDR) $(variant_bass_hdrs)" install
+$(PROJDIR)/bass_evo_L.nts3unit: $(UCSRC) $(UCXXSRC) $(variant_bass_evo_L_srcs) $(variant_bass_evo_L_hdrs) \
+                                 $(UHDR) $(HDRS) Makefile config.mk
+	@echo "=== Building variant bass_evo_L ==="
+	$(MAKE) --no-print-directory PROJECT=bass_evo_L UDEFS="$(variant_bass_evo_L_defines)" \
+		UCSRC="$(UCSRC) $(variant_bass_evo_L_srcs)" UINCDIR="$(UINCDIR) $(variant_bass_evo_L_incs)" \
+		UHDR="$(UHDR) $(variant_bass_evo_L_hdrs)" install
 ```
 
 **Two GNU make traps this ran into, both of which silently break the build:**
@@ -156,8 +181,8 @@ Also required in the `Makefile`:
 
 - `bake: $(GEN)` — re-bake only.
 - `install` keeps acid's `mv $(BUILDDIR)/$(PRODUCT) $(INSTALLDIR)/$(PRODUCT)`; `BUILDDIR := $(PROJDIR)/build/$(PROJECT)` so variants never share objects.
-- `clean` drops `$(PROJDIR)/build`, `$(PROJDIR)/sim` and `$(PROJDIR)/*.nts3unit` (the acid line `$(PROJECT_ROOT)/$(PROJECT)*.nts3unit` no longer matches, since variants are named after wavs).
-- `wasm` uses `WTNAME ?= $(firstword $(WTSTEMS))`, copies `$(GENDIR)/$(WTNAME)/wt_data.{c,h}` into `$(WASMDIR)` and adds `-DWT_NAME=$(WTNAME) -I$(GENDIR)/$(WTNAME)` to the emcc line. `emrun` is kept **out** of it in a separate `wasmrun` target: it serves the page and blocks until the browser tab is closed, so `make WTNAME=bass wasm` builds and exits, `make WTNAME=bass wasmrun` also opens it.
+- `clean` drops `$(PROJDIR)/build`, `$(PROJDIR)/sim` and `$(PROJDIR)/*.nts3unit` (the acid line `$(PROJECT_ROOT)/$(PROJECT)*.nts3unit` no longer matches, since variants are named after wavs plus axis suffix).
+- `wasm` uses `WTNAME ?= $(firstword $(WTSTEMS))` and `WTAXIS ?= plain`, copies `$(GENDIR)/$(WTNAME)/wt_data.{c,h}` into `$(WASMDIR)` and adds `$(variant_$(SIMNAME)_defines) -I$(GENDIR)/$(WTNAME)` to the emcc line, so the sandbox compiles the *same* variant as the unit it previews. `WASMDIR := $(PROJDIR)/sim/$(SIMNAME)` is per variant (acid's layout) so `WTAXIS=evo_L` does not overwrite the plain page. `emrun` is kept **out** of `wasm` in a separate `wasmrun` target: it serves the page and blocks until the browser tab is closed, so `make WTNAME=bass wasm` builds and exits, `make WTNAME=bass wasmrun` also opens it.
 
 ---
 
@@ -195,29 +220,42 @@ Also required in the `Makefile`:
 | File | Role |
 | :--- | :--- |
 | `spec.md` | This document. |
-| `Makefile` | acid-style build + wav discovery, bake rule, per-variant recursion, wasm. |
+| `Makefile` | acid-style build + wav discovery, the axis × wav variant cross product, bake rule, per-variant recursion, wasm. |
 | `config.mk` | `PROJECT := wavetable`, `UCSRC = header.c`, `UCXXSRC = unit.cc wt_osc.cpp`, `ULIBS = -lm`. |
-| `header.c` | Unit descriptor: `dev_id = 0x735A585A` ('sZXZ', the vendor ID shared with the other units in this fork), `unit_id = WT_UNIT_ID`, name `WT_DISPLAY_NAME`, 8 descriptors, default mappings. Includes `"wt_data.h"`. |
+| `header.c` | Unit descriptor: `dev_id = 0x735A585A` ('sZXZ', the vendor ID shared with the other units in this fork), `unit_id = WT_UNIT_ID | WT_VARIANT_ID`, name `WT_VARIANT_NAME` (the baked display name, or the shorter `WT_NAME_BASE` + the axis suffix), 8 descriptors, default mappings. Includes `"wt_data.h"`. |
 | `unit.cc` | Runtime callbacks (acid's file, same pattern: validation in `unit_init`, `cached_values[]` getters, no `<climits>` guards). `setTempo` and `tempo4ppqnTick` forward the host transport to the DSP. The `sdram_alloc` hook is only required when `getBufferSize() > 0`, which for this unit never is. |
-| `wt_osc.h` / `wt_osc.cpp` | `Processor` implementation: mip selection and table read, LFO, unison, sub, ADSR morph + drone, the generative sequencer and its host/internal clock, softclip, additive mix with the input. |
+| `wt_osc.h` / `wt_osc.cpp` | `Processor` implementation: mip selection and table read, LFO, unison, sub, ADSR morph + drone, the generative sequencer and its host/internal clock, `write_out` (the `_L`/`_R` routing), `driftPattern` (the `_evo` mutation), softclip, additive mix with the input. |
 | `tools/wav2table.py` | The baker (§2). |
-| `wt/*.wav` | Wavetable sources; one variant per file. |
+| `wt/*.wav` | Wavetable sources; six variants per file. |
 | `wasm.cc` | Shared genericfx WebAssembly wrapper (unmodified by this redesign): it enumerates `unit_header.common.params[]` at runtime, so the browser harness picks up the new eight parameters and the removed ones automatically. Only the generated `wt_data.c/h` is swapped per variant. |
 
 ---
 
 ### 6. Build & verify
 
-- `make` → bakes every wav, then emits `<stem>.nts3unit` per wav (e.g. `bass.nts3unit` in the project root). Re-running `make` with nothing changed is a silent no-op.
-- `make bake` → re-bake only. `make WTNAME=bass wasm` → that table built in `sim/bass.html`; `make WTNAME=bass wasmrun` also opens it in a browser.
-- `make clean` → drops `build/`, `sim/` and the `*.nts3unit` files. The three variants must be rebuilt from scratch, not incrementally, to be trusted.
+- `make` → bakes every wav, then emits six units per wav in the project root (`bass.nts3unit`, `bass_evo.nts3unit`, `bass_L.nts3unit`, `bass_R.nts3unit`, `bass_evo_L.nts3unit`, `bass_evo_R.nts3unit`; 24 files for the four wavs in `wt/`). Re-running `make` with nothing changed is a silent no-op.
+- `make bake` → re-bake only. `make WTNAME=bass wasm` → that table built in `sim/bass/bass.html`; `make WTNAME=cr_ch WTAXIS=evo_L wasm` → that variant in `sim/cr_ch_evo_L/cr_ch_evo_L.html`; `make WTNAME=bass wasmrun` also opens it in a browser.
+- `make clean` → drops `build/`, `sim/` and the `*.nts3unit` files. All 24 units must be rebuilt from scratch, not incrementally, to be trusted.
 - Size budget: table 8176 B + offsets 20 B + code ≈ 17 KB per unit, against the **~32 KB max unit size / 32 KB max RAM load**.
-- Loader check: `arm-none-eabi-nm -u build/bass/bass.elf` must list exactly `wt_sine_lut_f`, `wt_sqr_lut_f`, `midi_to_hz_lut_f`, `pow2_lut_f` and nothing else.
+- Loader check: `arm-none-eabi-nm -u build/<v>/<v>.elf` must list exactly `wt_sine_lut_f`, `wt_sqr_lut_f`, `midi_to_hz_lut_f`, `pow2_lut_f` and nothing else, in every variant — the axes only add inline code, never a new external.
 - Sanity check the bake before trusting it: the baker prints f0 and total bytes, and `build/gen/bass/wt_data.c` is a plain int16 table — feed it back through a DFT and confirm (a) the strongest partial sits at the printed f0 and (b) **the mip levels are actually different**, e.g. level 8's h8/h1 is 0.000 while level 0's is 0.006. A flat pyramid means the low-pass in `build_mips` is missing or mis-tuned, and POSITION will be inaudible.
 
 #### Measured on the current build
 
-`arm-none-eabi-size build/<v>/<v>.elf`: `text 16889, data 364, bss 200` = **17453 B**, packaged as an 18512 B `<v>.nts3unit` — identical for all three variants, since only the table's contents differ. (The `data`/`text` split is what the loader actually cares about: `text` is the resident code + rodata that holds the 8176 B table, and it is the same size for all three because the array is the same length.)
+`arm-none-eabi-size build/<v>/<v>.elf`, per axis (the wav only changes the table's *contents*, not the code size, so these are the numbers for all four wavs):
+
+| Variant | text | data | bss | dec | `.nts3unit` |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| `<wav>` | 16889 | 364 | 200 | 17453 | 18512 |
+| `<wav>_evo` | 17199 | 368 | 204 | 17771 | 18828 |
+| `<wav>_L` | 16637 | 364 | 200 | 17201 | 18264 |
+| `<wav>_R` | 16621 | 364 | 200 | 17185 | 18248 |
+| `<wav>_evo_L` | 16947 | 368 | 204 | 17519 | 18572 |
+| `<wav>_evo_R` | 16931 | 368 | 204 | 17503 | 18556 |
+
+`_evo` costs +310 B of text (the inlined `driftPattern`) and 4 B each of data/bss (`drift_state_`); `_L`/`_R` *save* 252/268 B, because one softclip and one add per sample are compiled out and the quiet side is a plain copy. The `data`/`text` split is what the loader actually cares about: `text` is the resident code + rodata that holds the 8176 B table, and it is the same size across wavs because the array is the same length.
+
+Variant behaviour, measured on the **compiled** `wt_osc.cpp` rendered through the emscripten build of the same sources (throwaway harness, node): with a constant `(0.25, −0.5)` input and `ADSR` in DRONE, `bass` writes `(−0.202260, −0.952260)`, `bass_L` writes `(−0.202260, −0.500000)` and `bass_R` writes `(0.250000, −0.952260)` — the dry side is bit-exact passthrough and the wet side is bit-identical to the plain build, i.e. the axis removes a channel's contribution without touching the other one. `_evo` keeps the same euclidean hit pattern but mutates pitches that then persist into later bars (e.g. step 13 sits at 96.2 Hz from the first bar boundary onwards, against ~108 Hz in the plain build), where the plain build's line is a fixed 16-step loop.
 
 The DSP is verified by a host harness that renders the **compiled** `wt_osc.cpp` against the real baked table and firmware LUT stubs, then FFTs / autocorrelates the result (`/var/folders/.../opencode/wt_test`, throwaway). It is a behavioural suite, not a golden-file comparison: it asserts relationships (partials are harmonics, timings are close, the played pattern is the generated pattern), so it survives DSP tuning. **228 checks, all passing, for each of `bass`, `cr_ch` and `evolve`.**
 
@@ -250,7 +288,8 @@ The acid unit is the sibling this one was ported from, so the differences are wo
 
 #### Same as acid
 
-- Input/output stage: `out = in + fx_softclipf(0.15, wet * 0.5)`, both channels (`write_out`'s default path). The `_L`/`_R` build variants are the only difference here, see below.
+- Input/output stage: `out = in + fx_softclipf(0.15, wet * 0.5)`, both channels (`write_out`'s default path), and the `_L`/`_R` build variants are the acid implementation verbatim, so the two units' `write_out` differ only in the two extra `sig_l`/`sig_r` arguments this unit needs for its unison pan.
+- Build option set: the same axes, `-DAUTODRIFT` and `-DUNIT_OUT_LEFT` / `-DUNIT_OUT_RIGHT`, so both units ship `plain` / `_evo` / `_L` / `_R` / `_evo_L` / `_evo_R` (here crossed with the wav list). `driftPattern` is the acid function with the scale fetched through this unit's `scale()` accessor; the mutation is applied on the bar line in **both** clock branches, before `triggerStep()`.
 - Sequencer skeleton: 16 steps of 16ths at host tempo, seeded by `PATTERN` with the same LCG (`0x7F4A7C15 + (seed+1)*0x9E3779B9`), the same minor pentatonic `{0,2,3,5,7,8,10,12}`, the same root/fifth bias, the same ~44 % accents and ~25 % legato slides, step 0 forced to the root, slides gliding without a re-attack, and a retrigger that resumes the attack from the current level so a fast line never clicks. **The same PATTERN seed yields the same 16 notes in both units.**
 - Audio only while the pad is touched; the clock keeps running; legato slides and accent-weighted retriggers behave identically.
 - Same vendor `dev_id` (`0x735A585A`, 'sZXZ').
@@ -259,7 +298,7 @@ The acid unit is the sibling this one was ported from, so the differences are wo
 
 | # | Stage | Acid | Wavetable unit |
 | :--- | :--- | :--- | :--- |
-| 1 | Output routing | `_L` / `_R` build variants put the voice on one channel only (ids `0x12`/`0x22`/`0x32`/`0x42`), so two copies can be chained as separate instruments | no such variant; the voice always goes to both channels |
+| 1 | Output routing | `_L` / `_R` build variants put the voice on one channel only (ids `0x12`/`0x22`/`0x32`/`0x42`), so two copies can be chained as separate instruments | the same two variants, with the ids layered onto the wav's own id (`WT_UNIT_ID | 0x400` / `| 0x800`) — but a single mono sum, not the panned pair, so `_L` keeps the pan's left signal and drops the right one |
 | 2 | Oscillators | one band-limited oscillator, saw↔square crossfade by `WAVE` | two (unison), one per channel, ±`DETUNE`/2 cents, equal-power pan |
 | 3 | Waveform source | synthesised: `osc_bl2_sawf` / `osc_bl2_sqrf`, band-limited by harmonic count | baked: `int16` mip-mapped cycle, 4-point Catmull-Rom, band-limited by picking a mip level from pitch and POSITION |
 | 4 | Top of the range | just stops adding harmonics | explicit crossover to the firmware band-limited sine above 5512.5 Hz |
@@ -275,7 +314,7 @@ The acid unit is the sibling this one was ported from, so the differences are wo
 | 14 | Density | user parameter `DENSITY`, 1–16 Euclidean pulses (default 12) | no control; the seed derives 5–12 pulses, so turning PATTERN changes the rhythm as well as the notes |
 | 15 | Pattern change | only sets a dirty flag; picked up lazily, no rewind, no immediate trigger | while touched: regenerate, rewind to step 0, clear the clock and trigger immediately |
 | 16 | Sequencer off | impossible — the unit always sequences | `PATTERN = 0` is a mode: no sequencer, the pad plays the root note |
-| 17 | Pattern drift | `-DAUTODRIFT` mutates a few steps once per bar so the line drifts | no drift; a seed is a fixed 16-step loop |
+| 17 | Pattern drift | `-DAUTODRIFT` mutates a few steps once per bar so the line drifts | same `-DAUTODRIFT` and the same mutation (1–4 steps, root/fifth bias, step 0 re-pinned), but it only runs in the `_evo` variants — `plain` is a fixed 16-step loop. The euclidean hit pattern is never mutated in either unit, so the rhythm of the bar keeps its shape |
 | 18 | Clock | the host snap and the free-running clock are two independent `if`s, so if the two grids ever drift the same step can be triggered twice a few samples apart and the second trigger cuts the note short | mutually exclusive `if`/`else`, so it cannot double-trigger; host and free-running renders agree to 0.0 ms. **The acid unit still carries the looser version** |
 | 19 | Parameters | `WAVE ROOT PATTERN DENSITY CUTOFF RESON DECAY ACID` | `PITCH POSITION LFO RATE LFO DEPTH ADSR PATTERN SUB DETUNE` — only `PATTERN` shares a name, and `ROOT` is `PITCH` |
-| 20 | Identity | fixed ids `0x02`/`0x12`/`0x22`/`0x32`/`0x42` | one id per wav, `(FNV-1a(stem) & 0x1FF) \| 0x100` → `0x100`–`0x1FF` (bass `0x017A`, cr_ch `0x0106`, evolve `0x01D0`), keeping `0x00`–`0xFF` free for the fork's other units so both can be installed together |
+| 20 | Identity | fixed ids `0x02`/`0x12`/`0x22`/`0x32`/`0x42` | one id per wav, `(FNV-1a(stem) & 0x1FF) \| 0x100` → `0x100`–`0x1FF` (bass `0x017A`, cr_ch `0x0106`, evolve `0x01D0`), keeping `0x00`–`0xFF` free for the fork's other units so both can be installed together; the axis bits `0x200` (evo) / `0x400` (L) / `0x800` (R) sit above that hash, so `bass_evo_R` is `0x0B7A`. The name is the baked `WT DISPLAY` stem plus the axis suffix (`WT BASS Evo L`), truncated by the baker to 10 stem characters so it always fits `UNIT_NAME_LEN` |

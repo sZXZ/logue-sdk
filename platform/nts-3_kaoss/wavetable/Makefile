@@ -41,17 +41,25 @@ include config.mk
 # Wavetable variants
 #
 # Every wav in wt/ is baked into build/gen/<name>/wt_data.{h,c} by
-# tools/wav2table.py and built as its own variant, so one folder of samples
-# turns into one folder of .nts3unit files:
+# tools/wav2table.py, and every wav is then built as the same six variants the
+# acid unit uses (one per build option combination), so one folder of samples
+# turns into six folders of .nts3unit files:
 #
 #   <wav stem>          the baked wavetable, e.g. bass.nts3unit
+#   <wav stem>_evo      + -DAUTODRIFT, the 16 step line mutates once per bar
+#   <wav stem>_L        + -DUNIT_OUT_LEFT, voice on the left output only
+#   <wav stem>_R        + -DUNIT_OUT_RIGHT, voice on the right output only
+#   <wav stem>_evo_L    both of the above
+#   <wav stem>_evo_R    both of the above
 #
-# <wav stem> is passed down as -DWT_NAME and selects that variant's generated
-# source and include directory; the generated header also carries the on-device
-# unit name and unit id. Drop a new wav into wt/ and `make` builds it.
+# The wav stem is passed down as -DWT_NAME and selects that table's generated
+# source and include directory; the axis suffix only adds build macros, so all
+# six variants of a wav share one baked table. The generated header carries the
+# on-device unit name and unit id for the wav; header.c combines them with the
+# axis macros. Drop a new wav into wt/ and `make` builds its six variants.
 #
-#   make WTNAME=lead wasm     build one specific table for the sandbox
-#   make bake                 re-bake the tables without building
+#   make WTNAME=lead WTAXIS=evo_L wasm   build one variant for the sandbox
+#   make bake                            re-bake the tables without building
 #
 
 WTDIR   := $(PROJDIR)/wt
@@ -64,21 +72,57 @@ ifeq ($(strip $(WTSRCS)),)
 $(error no wav files in $(WTDIR) -- nothing to build)
 endif
 
-# One variant per wav file: the stem is the variant name and -DWT_NAME
-VARIANTS := $(WTSTEMS)
+# The build option axes, crossed with the wav list. `plain` is the unadorned
+# unit and keeps the bare wav stem as its variant name; the macros are
+# independent and combine, so the cross product is the full 2x2x2 lattice (evo x
+# left x right) with plain as its origin. See the build option block in
+# wt_osc.h and the variant selection in header.c.
+WT_AXES := plain evo L R evo_L evo_R
+
+WT_AXIS_suffix_plain :=
+WT_AXIS_suffix_evo   := _evo
+WT_AXIS_suffix_L     := _L
+WT_AXIS_suffix_R     := _R
+WT_AXIS_suffix_evo_L := _evo_L
+WT_AXIS_suffix_evo_R := _evo_R
+
+WT_AXIS_defines_plain :=
+WT_AXIS_defines_evo   := -DAUTODRIFT
+WT_AXIS_defines_L     := -DUNIT_OUT_LEFT
+WT_AXIS_defines_R     := -DUNIT_OUT_RIGHT
+WT_AXIS_defines_evo_L := -DAUTODRIFT -DUNIT_OUT_LEFT
+WT_AXIS_defines_evo_R := -DAUTODRIFT -DUNIT_OUT_RIGHT
+
+# WTPAD_PITCH (header.c) is orthogonal to the axes: it is not a variant, it is
+# `make WTPAD_PITCH=1`, which adds the X-across-the-pad behaviour to all of
+# them. It has to be a variable of its own because the variant rules pass
+# UDEFS= on the sub-make command line, which would shadow a UDEFS= given here.
+ifdef WTPAD_PITCH
+WT_EXTRA_DEFINES := -DWTPAD_PITCH
+else
+WT_EXTRA_DEFINES :=
+endif
+
+# One variant per (wav, axis) pair: the wav stem, plus the axis suffix (empty
+# for plain). -DWT_NAME names the wav, the axis only contributes its own
+# defines -- both deferred, so one WT_VARIANT call covers every stem.
+WT_NAMES := $(foreach v,$(WTSTEMS),$(foreach a,$(WT_AXES),$(v)$(WT_AXIS_suffix_$(a))))
+
+VARIANTS := $(WT_NAMES)
 
 define WT_VARIANT
-variant_$(1)_defines := -DWT_NAME=$(1)
-variant_$(1)_srcs := $(GENDIR)/$(1)/wt_data.c
-variant_$(1)_hdrs := $(GENDIR)/$(1)/wt_data.h
-variant_$(1)_incs := $(GENDIR)/$(1)
+variant_$(1)_defines := -DWT_NAME=$(2) $$(WT_AXIS_defines_$(3)) $$(WT_EXTRA_DEFINES)
+variant_$(1)_srcs := $(GENDIR)/$(2)/wt_data.c
+variant_$(1)_hdrs := $(GENDIR)/$(2)/wt_data.h
+variant_$(1)_incs := $(GENDIR)/$(2)
 endef
-$(foreach v,$(WTSTEMS),$(eval $(call WT_VARIANT,$(v))))
+$(foreach v,$(WTSTEMS),$(foreach a,$(WT_AXES),$(eval $(call WT_VARIANT,$(v)$(WT_AXIS_suffix_$(a)),$(v),$(a)))))
 
 GEN := $(patsubst $(WTDIR)/%.wav,$(GENDIR)/%/wt_data.c,$(WTSRCS))
 
-# Table built by `make wasm` (the first one unless overridden)
+# Table + variant built by `make wasm` (the first one unless overridden)
 WTNAME ?= $(firstword $(WTSTEMS))
+WTAXIS ?= plain
 WTGEN  := $(GENDIR)/$(WTNAME)
 
 ##############################################################################
@@ -197,8 +241,16 @@ LIBDIR := $(patsubst %,-I%,$(DLIBDIR) $(ULIBDIR))
 #
 SANDBOXDIR ?= $(PROJDIR)/../../../websim
 WASMSRC = wasm.cc $(UCSRC) $(UCXXSRC) $(wildcard $(SANDBOXDIR)/dsp/*.c) $(wildcard $(SANDBOXDIR)/dsp/*.cpp)
-WASMDIR := $(PROJDIR)/sim
+# One sandbox per variant, so WTNAME=bass WTAXIS=evo_L does not overwrite the
+# plain bass page.
+ifeq ($(WTAXIS),plain)
 SIMNAME ?= $(WTNAME)
+else
+SIMNAME ?= $(WTNAME)_$(WTAXIS)
+endif
+WASMDIR := $(PROJDIR)/sim/$(SIMNAME)
+# The variant's defines, so the sandbox matches the unit it previews
+WTDEFS := $(variant_$(SIMNAME)_defines)
 # emscripten/version.h #errors when reached through the source-tree include
 # path; point at the sysroot emcc actually uses instead.
 EMCC_SYSROOT_INC := $(TOOLSDIR)/emsdk/upstream/emscripten/cache/sysroot/include
@@ -247,9 +299,9 @@ bake: $(GEN)
 	@echo Done
 	@echo
 
-# Build + install one variant per wav via a recursive make carrying its defines.
-# The variant's baked table is added to the source and include lists; see the
-# wavetable section at the top of this file.
+# Build + install one variant per (wav, axis) pair via a recursive make carrying
+# its defines. The variant's baked table is added to the source and include
+# lists; see the wavetable section at the top of this file.
 #
 # One explicit rule per variant rather than a pattern rule, because the
 # prerequisites have to name that variant's generated sources and headers and
@@ -345,10 +397,12 @@ install: $(BUILDDIR)/$(PRODUCT)
 	@echo Done
 	@echo
 
-# The sandbox needs the same baked table as the hardware build.
+# The sandbox needs the same baked table and the same build macros as the
+# hardware build.
 #
-#   make WTNAME=bass wasm      build the sandbox page (no browser)
-#   make WTNAME=bass wasmrun   build it and open it with emrun
+#   make WTNAME=bass wasm                build the plain bass page (no browser)
+#   make WTNAME=bass WTAXIS=evo_L wasm   build one variant's page instead
+#   make WTNAME=bass wasmrun             build it and open it with emrun
 wasm: $(WTGEN)/wt_data.c
 	@echo "Building WebAssembly audio processor ($(SIMNAME))"
 	@mkdir -p $(WASMDIR)
@@ -357,7 +411,7 @@ wasm: $(WTGEN)/wt_data.c
 	@cp -r $(SANDBOXDIR)/images $(WASMDIR)/
 	@cp -r $(WASMSRC) $(WASMDIR)/
 	@cp -r $(WTGEN)/wt_data.c $(WTGEN)/wt_data.h $(WASMDIR)/
-	@$(EMCC_BIN_PATH)/emcc -Wno-unknown-attributes -Wno-limited-postlink-optimizations -DWT_NAME=$(WTNAME) $(INCDIR) -I$(WASMDIR) \
+	@$(EMCC_BIN_PATH)/emcc -Wno-unknown-attributes -Wno-limited-postlink-optimizations $(WTDEFS) $(INCDIR) -I$(WASMDIR) \
 		-s AUDIO_WORKLET=1 \
 		-s WASM_WORKERS=1 \
 		-lembind \
@@ -368,7 +422,7 @@ wasm: $(WTGEN)/wt_data.c
 		-o $(WASMDIR)/$(SIMNAME).html
 	@echo Done
 	@echo "Sandbox written to $(WASMDIR)/$(SIMNAME).html"
-	@echo "Open it with: make WTNAME=$(WTNAME) wasmrun"
+	@echo "Open it with: make WTNAME=$(WTNAME) WTAXIS=$(WTAXIS) wasmrun"
 
 # emrun serves the page and blocks until the browser tab is closed, so it is
 # kept out of the `wasm` target.

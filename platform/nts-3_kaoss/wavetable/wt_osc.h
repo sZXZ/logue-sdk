@@ -26,6 +26,15 @@
  *    - Optional generative 16 step pattern (PATTERN seed, tempo synced to the
  *      host 4PPQN clock) played under the touch, like the acid unit
  *
+ *  Build options, the acid unit's set, cross producted with the wav list by the
+ *  Makefile (so every wav in wt/ builds as six units):
+ *    - -DAUTODRIFT ("<wav>_evo") turns the static 16 step pattern into an
+ *      evolving one: once per bar a few steps are softly mutated, so the line
+ *      drifts over time instead of looping forever
+ *    - -DUNIT_OUT_LEFT / -DUNIT_OUT_RIGHT ("<wav>_L" / "<wav>_R") add the
+ *      voice to a single output channel while the input still passes on both,
+ *      so two copies can be chained and mixed as separate instruments
+ *
  *  There is deliberately no filter and no dry/wet crossfade: on the kaoss
  *  those are another unit's job, and CUTOFF/RESON/MIX are better spent on
  *  wavetable specific controls. Mixing itself is the acid unit's additive
@@ -225,6 +234,9 @@ private:
   }
 
   void regenPattern();
+#ifdef AUTODRIFT
+  void driftPattern(); // once per bar, mutate a few steps (evolving line)
+#endif
   void triggerStep();   // fire the current step's note (sequencer running)
   void triggerRoot();   // fire the root note (sequencer off)
 
@@ -274,4 +286,7 @@ private:
   uint32_t host_counter_;
   bool host_sync_valid_;
   bool pattern_dirty_;
+#ifdef AUTODRIFT
+  uint32_t drift_state_; // evolving-pattern mutation RNG
+#endif
 };
