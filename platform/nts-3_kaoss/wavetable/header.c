@@ -68,7 +68,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
       // Format: min, max, center (unused), default, type, frac. bits, frac. mode, <reserved>, name
 
       // PITCH: base pitch, displayed as a musical pitch (the DSP scales 0..1023 to MIDI 0..127)
-      {0, 1023, 0, 360, k_unit_param_type_midi_note, 0, 0, 0, {"PITCH"}},
+      {0, 1023, 0, 570, k_unit_param_type_midi_note, 0, 0, 0, {"PITCH"}},
 
       // POSITION: wavetable position, 0 = darkest level the pitch allows,
       // 1023 = the full baked cycle
@@ -104,7 +104,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
 
     // PITCH, LFO RATE, ADSR, SUB and DETUNE are not mapped to the pad
     // (edited via the menu)
-    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 360},
+    {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 570},
 
 #ifdef WTPAD_PITCH
     // Build option -DWTPAD_PITCH: X plays the wavetable across the pad
