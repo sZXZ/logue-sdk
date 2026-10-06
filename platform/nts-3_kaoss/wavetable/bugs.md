@@ -1,10 +1,13 @@
 # Wavetable (WT) Unit — Known Bugs
 
-Two implementation bugs were found while comparing `spec.md` to the code. They are
-**documented here, not fixed** — both are latent (they do not misbehave in the default
-build), but they are real divergences between the code's stated intent and its
-behaviour. Both are also described in `spec.md` (§1), which treats the implementation
-as the source of truth.
+Three issues were found while comparing `spec.md` to the code — two latent code bugs and
+one misleading comment. They are recorded here **as found**; git history is the record of
+which have been addressed since. The two code bugs do not misbehave in the default build,
+but each is a real divergence between the code's stated intent and its behaviour. By
+policy the specific default values live **only** in `header.c` / `wt_osc.h` — not in code
+comments and not in `spec.md` — so the numbers below exist here, in the bug report, and
+nowhere else in the docs. Where a bug affects a claim in the spec, `spec.md` points back
+to this file.
 
 ## 1. `-DWTPAD_PITCH` never remaps the pad, only the defaults (Medium)
 
@@ -60,10 +63,8 @@ e.g. `#define k_pitch_init 570` in one header included by both `header.c` and
 **Description:** In this unit's grid the ADSR morph spans `0..819` in four `205`-wide
 zones, so the five presets sit at `0 / 205 / 410 / 615 / 820` and `256` is a quarter of
 the way from Pad (205) toward Perc (410) — `≈0.30 s` attack / `0.26 s` decay / `0.60`
-sustain / `0.45 s` release. The "exactly the Pad preset" comment is copy-pasted from the
-arpeggiator unit, where the morph spans the full `0..1023` in `256`-wide zones and Pad
-is exactly at `256`.
+sustain / `0.45 s` release. The "exactly the Pad preset" comment was copy-pasted from
+the arpeggiator unit, where the morph spans the full `0..1023` in `256`-wide zones and
+Pad is exactly at `256`.
 
-**Impact:** None functionally; the comment misleads anyone reading the defaults.
-
-**Fix:** Delete or correct the comment (e.g. `// a quarter of the way from Pad toward Perc`).
+**Impact:** None functionally; the comment misled anyone reading the defaults.

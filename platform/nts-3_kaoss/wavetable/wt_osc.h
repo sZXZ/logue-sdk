@@ -125,11 +125,11 @@ public:
 
     void reset()
     {
-      note = 360.f * 127.f / 1023.f; // ~A2
+      note = 360.f * 127.f / 1023.f;
       position = 512.f / 1023.f;
       lfo_rate = k_lfo_rate_min * 1.f; // set properly below
       lfo_depth = 0.f;                // LFO is opt in
-      adsr = 256;                     // exactly the Pad preset
+      adsr = 256;
       pattern = 0;                    // no sequencer until asked
       sub = 384.f / 1023.f;
       detune = 8.f;
